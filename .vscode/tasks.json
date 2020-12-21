@@ -1,0 +1,111 @@
+{
+    // See https://go.microsoft.com/fwlink/?LinkId=733558
+    // for the documentation about the tasks.json format
+    "version": "2.0.0",
+    "tasks":
+    [
+        {
+            "label": "build",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "command": "python",
+            "type": "shell",
+            "args": [
+                "${env:IDF_PATH}\\tools\\idf.py",
+                "build",
+                "all"
+            ],
+            "presentation": {
+                "reveal": "always",
+                "echo": true
+            },
+            "problemMatcher": {
+                "owner": "cpp",
+                "fileLocation": "absolute",
+                "pattern": {
+                    "regexp": "^(.*):(\\d+):(\\d+):\\s+(warning|error):\\s+(.*)$",
+                    "file": 1,
+                    "line": 2,
+                    "column": 3,
+                    "severity": 4,
+                    "message": 5
+                }
+            }
+        },
+        {
+            "label": "config",
+            "command": "python",
+            "type": "shell",
+            "args": [
+                "${env:IDF_PATH}\\tools\\idf.py",
+                "build",
+                "menuconfig"
+            ],
+            "group": "build",
+            "problemMatcher": [
+                "$gcc"
+            ]
+        },
+        {
+            "label": "flash",
+            "command": "python",
+            "type": "shell",
+            "args": [
+                "${env:IDF_PATH}\\tools\\idf.py",
+                "-p",
+                "COM21",
+                "-b",
+                "921600",
+                "flash"
+            ],
+            "group": "build",
+            "problemMatcher": [
+                "$gcc"
+            ]
+        },
+        {
+            "label": "monitor",
+            "command": "python",
+            "type": "shell",
+            "args": [
+                "${env:IDF_PATH}\\tools\\idf.py",
+                "-p",
+                "COM21",
+                "flash",
+                "monitor"
+            ],
+            "group": "build",
+            "problemMatcher": [
+                "$gcc"
+            ]
+        },
+        {
+            "label": "clean",
+            "command": "python",
+            "type": "shell",
+            "args": [
+                "${env:IDF_PATH}\\tools\\idf.py",
+                "clean"
+            ],
+            "group": "build",
+            "problemMatcher": [
+                "$gcc"
+            ]
+        },
+        {
+            "label": "full clean",
+            "command": "python",
+            "type": "shell",
+            "args": [
+                "${env:IDF_PATH}\\tools\\idf.py",
+                "fullclean"
+            ],
+            "group": "build",
+            "problemMatcher": [
+                "$gcc"
+            ]
+        }
+    ]
+}
