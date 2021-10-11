@@ -1,15 +1,15 @@
 {
-    "env":
-    {
-        "myDefaultIncludePath": ["${workspaceFolder}", "${workspaceFolder}/include"],
+    "env": {
+        "myDefaultIncludePath": [
+            "${workspaceFolder}",
+            "${workspaceFolder}/include"
+        ],
         "myCompilerPath": "/usr/local/bin/gcc-7"
     },
-    "configurations":
-    [
+    "configurations": [
         {
             "name": "ESP8266",
-            "includePath":
-            [
+            "includePath": [
                 "${workspaceFolder}/**",
                 "${workspaceRoot}",
                 "${workspaceRoot}/build",
@@ -74,8 +74,7 @@
                 "${IDF_PATH}/components/spiffs/include/**",
                 "${IDF_PATH}/components/wifi_provisioning/include/**"
             ],
-            "defines":
-            [
+            "defines": [
                 "GCC_NOT_5_2_0",
                 "ESP_PLATFORM",
                 "_GNU_SOURCE",
@@ -150,11 +149,15 @@
                 "limitSymbolsToIncludedHeaders": true,
                 "databaseFilename": "${workspaceRoot}/.vscode/browse.vc.db"
             },
-            "compilerPath": "${CMAKE_PATH}\\cmake.exe",
-            "compilerArgs" : ["-f Makefile"],
+            "compilerPath": "${env:CMAKE_PATH}\\cmake.exe",
+            "compilerArgs": [
+                "-f Makefile"
+            ],
             "intelliSenseMode": "clang-x64",
             "cStandard": "c11",
-            "cppStandard": "c++17"
+            "cppStandard": "c++17",
+            "compileCommands": "${workspaceFolder}/build/compile_commands.json",
+            "configurationProvider": "ms-vscode.cmake-tools"
         }
     ],
     "version": 4
