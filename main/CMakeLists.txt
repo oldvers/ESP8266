@@ -1,2 +1,5 @@
-idf_component_register(SRCS "hello_world_main.c"
-                    INCLUDE_DIRS "")
+idf_component_register(SRCS ./main.c east/east_packet.c east/east_task.c
+                       INCLUDE_DIRS . east/include                       # Edit following two lines to set component requirements (see docs)
+                       REQUIRES 
+                       PRIV_REQUIRES )
+
