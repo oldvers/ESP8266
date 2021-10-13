@@ -4,6 +4,7 @@
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/event_groups.h"
 
 #include "driver/uart.h"
 
@@ -11,30 +12,63 @@
 #include "east_packet.h"
 #include "block_queue.h"
 
-//#define BUF_SIZE (256)
-
 #define EAST_MAX_DATA_LENGTH   (200)
 #define EAST_HEADER_LENGTH     (6)
 #define EAST_MAX_PACKET_LENGTH (EAST_HEADER_LENGTH + EAST_MAX_DATA_LENGTH)
 
 #define EVT_EAST_TX_COMPLETE   (1 << 0)
 
-//EventGroupHandle_t   events;
+EventGroupHandle_t eastEvents;
 static BlockQueue_p iQueue;
-static U8 iBuffer[EAST_MAX_DATA_LENGTH * 8];
-//U8 oBuffer[EAST_MAX_DATA_LENGTH];
-
 static EAST_p iEast = NULL;
-static U8 iEastCtnr[16] = {0};
-//static U8 iBuffer[BUF_SIZE] = {0};
 static EAST_p oEast = NULL;
+static U8 iEastCtnr[16] = {0};
 static U8 oEastCtnr[16] = {0};
+static U8 iBuffer[EAST_MAX_DATA_LENGTH * 8] = {0};
 static U8 oBuffer[EAST_MAX_PACKET_LENGTH] = {0};
-static U32 gCount = 0;
 
 static FW_BOOLEAN oEAST_GetByte(U8 * pValue)
 {
-    return FW_FALSE;
+    FW_BOOLEAN result = FW_FALSE;
+
+    /* If there are some data in EAST packet */
+    if (0 < EAST_GetPacketSize(oEast))
+    {
+        (void)EAST_GetByte(oEast, pValue);
+        result = FW_TRUE;
+    }
+
+    return result;
+//    FW_RESULT r = FW_ERROR;
+
+    /* Empty the EAST block */
+//    r = EAST_GetByte(oEast, pValue);
+//    if (FW_COMPLETE == r)
+//    {
+//        if (FW_TRUE == IRQ_IsInExceptionMode())
+//        {
+//            (void)xEventGroupSetBits(eastEvents, EVT_EAST_TX_COMPLETE);
+//        }
+//        else
+//        {
+//            /* We have not woken a task at the start of the ISR */
+//            BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+
+//            (void)xEventGroupSetBitsFromISR
+//            (
+//                eastEvents,
+//                EVT_EAST_TX_COMPLETE,
+//                &xHigherPriorityTaskWoken
+//            );
+
+//            /* Now we can request to switch context if necessary */
+//            if (xHigherPriorityTaskWoken)
+//            {
+//                taskYIELD();
+//            }
+//        }
+//    }
+//    return FW_FALSE;
 }
 
 static FW_BOOLEAN iEAST_PutByte(U8 * pValue)
@@ -50,7 +84,7 @@ static FW_BOOLEAN iEAST_PutByte(U8 * pValue)
         /* If the block queue is full - ignore */
         if (0 == BlockQueue_GetCountOfFree(iQueue))
         {
-            return;
+            return FW_FALSE;
         }
 
         /* Put the block into the queue */
@@ -76,7 +110,48 @@ static FW_BOOLEAN iEAST_Complete(U8 * pValue)
 
 static FW_BOOLEAN oEAST_Complete(U8 * pValue)
 {
+    /* We have not woken a task at the start of the ISR */
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+
+    (void)xEventGroupSetBitsFromISR
+    (
+        eastEvents,
+        EVT_EAST_TX_COMPLETE,
+        &xHigherPriorityTaskWoken
+    );
+
+    /* Now we can request to switch context if necessary */
+    if (xHigherPriorityTaskWoken)
+    {
+        taskYIELD();
+    }
+
     return FW_TRUE;
+}
+
+void vEAST_SendResponse(U8 * pRsp, U16 size)
+{
+    EventBits_t events = 0;
+
+    /* Reset the EAST */
+    EAST_SetBuffer(oEast, pRsp, size);
+
+    /* Send the response */
+    EAST_UART_TxStart();
+
+    /* Wait for transmitting complete */
+    events = xEventGroupWaitBits
+             (
+                 eastEvents,
+                 EVT_EAST_TX_COMPLETE,
+                 pdTRUE,
+                 pdFALSE,
+                 portMAX_DELAY
+             );
+    if (EVT_EAST_TX_COMPLETE == (events & EVT_EAST_TX_COMPLETE))
+    {
+        /* Check for errors */
+    }
 }
 
 static void vEAST_Task(void * pvParameters)
@@ -118,8 +193,11 @@ static void vEAST_Task(void * pvParameters)
         printf("EAST Task received the packet. Len = %d\n", size);
 
         /* Prepare the response */
+        memcpy(rsp, req, size);
         /* Process the request */
         /* Send the response */
+        vEAST_SendResponse(rsp, size);
+        printf("EAST Task the packet sent. Len = %d\n", size);
 
         /* Release the block */
         (void)BlockQueue_Release(iQueue);
@@ -176,6 +254,10 @@ void EAST_Task_Init()
     (void)BlockQueue_Allocate(iQueue, &buffer, &size);
     /* Setup/Reset the input EAST packet */
     (void)EAST_SetBuffer(iEast, buffer, size);
+
+    /* Create the event group for synchronization */
+	eastEvents = xEventGroupCreate();
+    (void)xEventGroupClearBits(eastEvents, EVT_EAST_TX_COMPLETE);
 
     xTaskCreate(vEAST_Task, "EAST_Task", 1024, NULL, 10, NULL);
 }

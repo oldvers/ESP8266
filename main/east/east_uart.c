@@ -529,7 +529,8 @@ static void EAST_UART_IrqHandler(void * param)
 
         if ( 0 != (uart_intr_status & UART_TXFIFO_EMPTY_INT_ST_M) )
         {
-            uart_clear_intr_status(UART_NUM_0, UART_TXFIFO_EMPTY_INT_CLR_M);
+            //uart_clear_intr_status(UART_NUM_0, UART_TXFIFO_EMPTY_INT_CLR_M);
+            EAST_UART->int_clr.txfifo_empty = 1;
 
             int tx_fifo_rem = UART_FIFO_LEN - EAST_UART->status.txfifo_cnt;
             while (0 < tx_fifo_rem)
@@ -552,7 +553,8 @@ static void EAST_UART_IrqHandler(void * param)
 
             if (UART_FIFO_LEN == tx_fifo_rem)
             {
-                uart_disable_intr_mask(UART_NUM_0, UART_TXFIFO_EMPTY_INT_ENA_M);
+                //uart_disable_intr_mask(UART_NUM_0, UART_TXFIFO_EMPTY_INT_ENA_M);
+                EAST_UART->int_ena.txfifo_empty = 0;
                 if (NULL != gTxCmpltCb)
                 {
                     (void)gTxCmpltCb(NULL);
@@ -731,7 +733,9 @@ static void EAST_UART_IrqHandler(void * param)
 
                 // Get the buffer from the FIFO
                 // After Copying the Data From FIFO ,Clear intr_status
-            uart_clear_intr_status(UART_NUM_0, UART_RXFIFO_TOUT_INT_CLR_M | UART_RXFIFO_FULL_INT_CLR_M);
+//            uart_clear_intr_status(UART_NUM_0, UART_RXFIFO_TOUT_INT_CLR_M | UART_RXFIFO_FULL_INT_CLR_M);
+            EAST_UART->int_clr.rxfifo_tout = 1;
+            EAST_UART->int_clr.rxfifo_full = 1;
             //    uart_event.type = UART_DATA;
             //    uart_event.size = rx_fifo_len;
             //    p_uart->rx_stash_len = rx_fifo_len;
@@ -1314,7 +1318,6 @@ void EAST_UART_Init
 
     printf("UART: Enable interrupts\n");
     UART_ENTER_CRITICAL();
-    EAST_UART->int_clr.val = UART_INTR_MASK;
 
 //    if (intr_conf->intr_enable_mask & UART_RXFIFO_TOUT_INT_ENA_M) {
         EAST_UART->conf1.rx_tout_thrhd = ((UART_TOUT_THRESH_DEFAULT) & 0x7f);
@@ -1327,6 +1330,8 @@ void EAST_UART_Init
         EAST_UART->conf1.rxfifo_full_thrhd = UART_FULL_THRESH_DEFAULT;
 //    }
 
+    EAST_UART->conf1.txfifo_empty_thrhd = UART_EMPTY_THRESH_DEFAULT;
+
 //    if (intr_conf->intr_enable_mask & UART_TXFIFO_EMPTY_INT_ENA_M) {
 //        UART[uart_num]->conf1.txfifo_empty_thrhd = intr_conf->txfifo_empty_intr_thresh;
 //    }
@@ -1337,6 +1342,11 @@ void EAST_UART_Init
 //        | UART_FRM_ERR_INT_ENA_M
 //        | UART_RXFIFO_OVF_INT_ENA_M;
 //    _xt_isr_unmask(1 << ETS_UART_INUM);
+    /* Clear the interrupts' flags */
+    EAST_UART->int_clr.val = UART_INTR_MASK;
+    /* Enable the Frame/Overflow error interrupts  */
+    EAST_UART->int_ena.frm_err = 1;
+    EAST_UART->int_ena.rxfifo_ovf = 1;
     UART_EXIT_CRITICAL();
 
 //    return ESP_OK;
@@ -1362,18 +1372,31 @@ void EAST_UART_DeInit(void)
 
 void EAST_UART_TxStart(void)
 {
-    //
+    //uart_enable_tx_intr(uart_num, 1, UART_EMPTY_THRESH_DEFAULT);
+    //esp_err_t uart_enable_tx_intr(uart_port_t uart_num, int enable, int thresh)
+    //{
+    //UART_CHECK((uart_num < UART_NUM_MAX), "uart_num error", ESP_ERR_INVALID_ARG);
+    //UART_CHECK((thresh < UART_FIFO_LEN), "empty intr threshold error", ESP_ERR_INVALID_ARG);
+
+    UART_ENTER_CRITICAL();
+    EAST_UART->int_clr.txfifo_empty = 1;
+    //EAST_UART->conf1.txfifo_empty_thrhd = thresh & 0x7f;
+    EAST_UART->int_ena.txfifo_empty = 1;
+    UART_EXIT_CRITICAL();
+    //return ESP_OK;
 }
 
 void EAST_UART_RxStart(void)
 {
     printf("UART: Rx Start\n");
     UART_ENTER_CRITICAL();
-    EAST_UART->int_clr.val = UART_INTR_MASK;
-
-    EAST_UART->int_ena.val |= (UART_RXFIFO_FULL_INT_ENA_M | UART_RXFIFO_TOUT_INT_ENA_M |
-                               UART_FRM_ERR_INT_ENA_M | UART_RXFIFO_OVF_INT_ENA_M);
-    //_xt_isr_unmask(1 << ETS_UART_INUM);
+    //EAST_UART->int_clr.val = UART_INTR_MASK;
+    /* Clear the interrupts' flags */
+    EAST_UART->int_clr.rxfifo_full = 1;
+    EAST_UART->int_clr.rxfifo_tout = 1;
+    /* Enable the Rx buffer empty and Rx timeout interrupts */
+    EAST_UART->int_ena.rxfifo_full = 1;
+    EAST_UART->int_ena.rxfifo_tout = 1;
     UART_EXIT_CRITICAL();
 }
 
