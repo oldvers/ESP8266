@@ -1,4 +1,4 @@
 {
-    "cmake.cmakePath":"${env:CMAKE_PATH}\\cmake.exe",
-    "python.venvPath":"${env:IDF_PYTHON_ENV_PATH}"
+    //"cmake.cmakePath":"${env:CMAKE_PATH}\\cmake.exe",
+    //"python.venvPath":"${env:IDF_PYTHON_ENV_PATH}"
 }

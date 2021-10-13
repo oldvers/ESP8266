@@ -23,14 +23,16 @@
             },
             "problemMatcher": {
                 "owner": "cpp",
-                "fileLocation": "absolute",
-                "pattern": {
-                    "regexp": "^(.*):(\\d+):(\\d+):\\s+(warning|error):\\s+(.*)$",
-                    "file": 1,
-                    "line": 2,
-                    "column": 3,
-                    "severity": 4,
-                    "message": 5
+                "base" : "$gcc",
+                // The file name for reported problems is relative to the opened folder.
+                "fileLocation": ["relative", "${workspaceFolder}\\main"],
+                "pattern" : {
+                    "regexp" : "^(.*):(\\d+):(\\d+):\\s+(warning|error):\\s+(.*)$",
+                    "file" : 1,
+                    "line" : 2,
+                    "column" : 3,
+                    "severity" : 4,
+                    "message" : 5
                 }
             }
         },
