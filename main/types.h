@@ -6,7 +6,7 @@
 #endif
 #define NULL                 ((void *)0)
 
-#include "stdint.h"
+#include <stdint.h>
 
 typedef uint8_t              U8;
 typedef int8_t               S8;
