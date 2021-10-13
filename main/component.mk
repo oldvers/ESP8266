@@ -3,5 +3,5 @@
 #
 # (Uses default behaviour of compiling all source files in directory, adding 'include' to include path.)
 
-COMPONENT_SRCDIRS := . east
-COMPONENT_ADD_INCLUDEDIRS := . east/include
+COMPONENT_SRCDIRS := . east block_queue
+COMPONENT_ADD_INCLUDEDIRS := . east/include block_queue/include

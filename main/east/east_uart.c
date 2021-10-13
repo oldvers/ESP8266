@@ -48,7 +48,7 @@
     }
 
 #define UART_EMPTY_THRESH_DEFAULT  (10)
-#define UART_FULL_THRESH_DEFAULT  (120)
+#define UART_FULL_THRESH_DEFAULT   (80)
 #define UART_TOUT_THRESH_DEFAULT   (10)
 
 //typedef struct
@@ -1332,11 +1332,11 @@ void EAST_UART_Init
 //    }
 
     // uart_clear_intr_status(UART[uart_num], mask);
-    EAST_UART->int_ena.val = UART_RXFIFO_FULL_INT_ENA_M
-        | UART_RXFIFO_TOUT_INT_ENA_M
-        | UART_FRM_ERR_INT_ENA_M
-        | UART_RXFIFO_OVF_INT_ENA_M;
-    _xt_isr_unmask(1 << ETS_UART_INUM);
+//    EAST_UART->int_ena.val = UART_RXFIFO_FULL_INT_ENA_M
+//        | UART_RXFIFO_TOUT_INT_ENA_M
+//        | UART_FRM_ERR_INT_ENA_M
+//        | UART_RXFIFO_OVF_INT_ENA_M;
+//    _xt_isr_unmask(1 << ETS_UART_INUM);
     UART_EXIT_CRITICAL();
 
 //    return ESP_OK;
@@ -1367,7 +1367,14 @@ void EAST_UART_TxStart(void)
 
 void EAST_UART_RxStart(void)
 {
-    //
+    printf("UART: Rx Start\n");
+    UART_ENTER_CRITICAL();
+    EAST_UART->int_clr.val = UART_INTR_MASK;
+
+    EAST_UART->int_ena.val |= (UART_RXFIFO_FULL_INT_ENA_M | UART_RXFIFO_TOUT_INT_ENA_M |
+                               UART_FRM_ERR_INT_ENA_M | UART_RXFIFO_OVF_INT_ENA_M);
+    //_xt_isr_unmask(1 << ETS_UART_INUM);
+    UART_EXIT_CRITICAL();
 }
 
 void EAST_UART_SetBaudrate(U32 aValue)
