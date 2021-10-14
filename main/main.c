@@ -14,6 +14,7 @@
 
 #include "east_task.h"
 #include "wifi_task.h"
+#include "udp_task.h"
 
 
 void app_main()
@@ -32,4 +33,5 @@ void app_main()
     /* Initialize the tasks */
     EAST_Task_Init();
     WIFI_Task_Init();
+    UDP_Task_Init();
 }

@@ -14,6 +14,7 @@
 #include "lwip/sys.h"
 
 #include "types.h"
+#include "udp_task.h"
 
 //-------------------------------------------------------------------------------------------------
 
@@ -92,9 +93,6 @@ static void vWiFi_Start(void)
     /* Prepare the default configuration for WiFi */
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
-
-    /* Create the events group for WiFi task */
-    gWiFiEvents = xEventGroupCreate();
     
     /* Register event handler */
     HNDLR_REG(WIFI_EVENT, WIFI_EVENT_STA_START, &vWiFi_OnStarted);
@@ -231,6 +229,7 @@ void vWiFi_Task(void * pvParams)
     {
         if (FW_TRUE == vWiFi_Connect())
         {
+            UDP_NotifyWiFiIsConnected();
             vWiFi_WaitForDisconnect();
         }
         vTaskDelay(10000 / portTICK_RATE_MS);
@@ -242,6 +241,9 @@ void vWiFi_Task(void * pvParams)
 void WIFI_Task_Init(void)
 {
     ESP_ERROR_CHECK(nvs_flash_init());
+
+    /* Create the events group for WiFi task */
+    gWiFiEvents = xEventGroupCreate();
 
     xTaskCreate(vWiFi_Task, "WiFi", 4096, NULL, 5, NULL);
 }
