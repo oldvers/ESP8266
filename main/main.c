@@ -13,6 +13,7 @@
 #include "esp_spi_flash.h"
 
 #include "east_task.h"
+#include "wifi_task.h"
 
 
 void app_main()
@@ -30,4 +31,5 @@ void app_main()
 
     /* Initialize the tasks */
     EAST_Task_Init();
+    WIFI_Task_Init();
 }
