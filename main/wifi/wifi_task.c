@@ -18,7 +18,7 @@
 
 //-------------------------------------------------------------------------------------------------
 
-#define WIFI_SSID                "TestWLAN"
+#define WIFI_SSID                "HomeWLAN"
 #define WIFI_PASS                "wlanH020785endrix!"
 #define EVT_WIFI_STARTED         BIT0
 #define EVT_WIFI_CONNECTED       BIT1
@@ -27,8 +27,9 @@
 
 //-------------------------------------------------------------------------------------------------
 
-static const char *TAG = "WiFi";
+static const char *       TAG         = "WiFi";
 static EventGroupHandle_t gWiFiEvents = NULL;
+static uint32_t           gIpAddr     = 0;
 
 //-------------------------------------------------------------------------------------------------
 
@@ -51,7 +52,7 @@ static EventGroupHandle_t gWiFiEvents = NULL;
 
 //-------------------------------------------------------------------------------------------------
 
-static EventBits_t vWiFi_WaitFor(EventBits_t events, TickType_t timeout)
+static EventBits_t wifi_WaitFor(EventBits_t events, TickType_t timeout)
 {
     EventBits_t bits = 0;
 
@@ -59,9 +60,9 @@ static EventBits_t vWiFi_WaitFor(EventBits_t events, TickType_t timeout)
     bits = xEventGroupWaitBits
            (
                gWiFiEvents,
-               events,
-               pdTRUE,
-               pdFALSE,
+               events,       /* Bits To Wait For */
+               pdTRUE,       /* Clear On Exit */
+               pdFALSE,      /* Wait For All Bits */
                timeout / portTICK_RATE_MS
            );
 
@@ -70,7 +71,7 @@ static EventBits_t vWiFi_WaitFor(EventBits_t events, TickType_t timeout)
 
 //-------------------------------------------------------------------------------------------------
 
-static void vWiFi_OnStarted
+static void wifi_OnStarted
 (
     void* arg,
     esp_event_base_t event_base,
@@ -84,7 +85,84 @@ static void vWiFi_OnStarted
 
 //-------------------------------------------------------------------------------------------------
 
-static void vWiFi_Start(void)
+static void wifi_OnConnected
+(
+    void* arg,
+    esp_event_base_t event_base,
+    int32_t event_id,
+    void* event_data
+)
+{
+    ESP_LOGI(TAG, "Connected to \"%s\"", WIFI_SSID);
+    xEventGroupSetBits(gWiFiEvents, EVT_WIFI_CONNECTED);
+}
+
+//-------------------------------------------------------------------------------------------------
+
+static void wifi_OnGotIp
+(
+    void* arg,
+    esp_event_base_t event_base,
+    int32_t event_id,
+    void* event_data
+)
+{
+    ip_event_got_ip_t * event = (ip_event_got_ip_t*)event_data;
+
+    gIpAddr = event->ip_info.ip.addr;
+    //ESP_LOGI(TAG, "Got IP: " IPSTR, IP2STR(&event->ip_info.ip));
+
+    ESP_LOGI(TAG, "Got IP : %s", ip4addr_ntoa(&event->ip_info.ip));
+    xEventGroupSetBits(gWiFiEvents, EVT_WIFI_GOT_IP);
+}    
+
+//-------------------------------------------------------------------------------------------------
+
+static void wifi_OnDisconnected
+(
+    void* arg,
+    esp_event_base_t event_base,
+    int32_t event_id,
+    void* event_data
+)
+{ 
+    ESP_LOGE(TAG, "Disconnected!");
+    xEventGroupSetBits(gWiFiEvents, EVT_WIFI_DISCONNECTED);
+}
+
+//-------------------------------------------------------------------------------------------------
+
+static void wifi_RegisterHandlers(void)
+{
+    HNDLR_REG
+    (
+        WIFI_EVENT,
+        WIFI_EVENT_STA_START,
+        &wifi_OnStarted
+    );
+    HNDLR_REG
+    (
+        WIFI_EVENT,
+        WIFI_EVENT_STA_CONNECTED,
+        &wifi_OnConnected
+    );
+    HNDLR_REG
+    (
+        IP_EVENT,
+        IP_EVENT_STA_GOT_IP,
+        &wifi_OnGotIp
+    );
+    HNDLR_REG
+    (
+        WIFI_EVENT,
+        WIFI_EVENT_STA_DISCONNECTED,
+        &wifi_OnDisconnected
+    );
+}
+
+//-------------------------------------------------------------------------------------------------
+
+static void wifi_Start(void)
 {
     /* Prepare the events loop */
     tcpip_adapter_init();
@@ -95,7 +173,8 @@ static void vWiFi_Start(void)
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
     
     /* Register event handler */
-    HNDLR_REG(WIFI_EVENT, WIFI_EVENT_STA_START, &vWiFi_OnStarted);
+    wifi_RegisterHandlers();
+    //HNDLR_REG(WIFI_EVENT, WIFI_EVENT_STA_START, &vWiFi_OnStarted);
 
     //ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &event_handler, NULL));
 
@@ -115,74 +194,30 @@ static void vWiFi_Start(void)
     ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_STA, &wifi_config) );
     ESP_ERROR_CHECK(esp_wifi_start());
     
-    (void)vWiFi_WaitFor(EVT_WIFI_STARTED, portMAX_DELAY);
+    (void)wifi_WaitFor(EVT_WIFI_STARTED, portMAX_DELAY);
     
     /* Unregister event handler */
-    HNDLR_UNREG(WIFI_EVENT, WIFI_EVENT_STA_START, &vWiFi_OnStarted);
+    //HNDLR_UNREG(WIFI_EVENT, WIFI_EVENT_STA_START, &vWiFi_OnStarted);
 }
 
 //-------------------------------------------------------------------------------------------------
 
-static void vWiFi_OnConnected
-(
-    void* arg,
-    esp_event_base_t event_base,
-    int32_t event_id,
-    void* event_data
-)
-{
-    ESP_LOGI(TAG, "Connected to \"%s\"", WIFI_SSID);
-    xEventGroupSetBits(gWiFiEvents, EVT_WIFI_CONNECTED);
-}
-
-//-------------------------------------------------------------------------------------------------
-
-static void vWiFi_OnGotIp
-(
-    void* arg,
-    esp_event_base_t event_base,
-    int32_t event_id,
-    void* event_data
-)
-{
-    ip_event_got_ip_t * event = (ip_event_got_ip_t*)event_data;
-
-    ESP_LOGI(TAG, "Got IP : %s", ip4addr_ntoa(&event->ip_info.ip));
-    xEventGroupSetBits(gWiFiEvents, EVT_WIFI_GOT_IP);
-}    
-
-//-------------------------------------------------------------------------------------------------
-
-static void vWiFi_OnDisconnected
-(
-    void* arg,
-    esp_event_base_t event_base,
-    int32_t event_id,
-    void* event_data
-)
-{ 
-    ESP_LOGE(TAG, "Disconnected!");
-    xEventGroupSetBits(gWiFiEvents, EVT_WIFI_DISCONNECTED);
-}
-
-//-------------------------------------------------------------------------------------------------
-
-static FW_BOOLEAN vWiFi_Connect(void)
+static FW_BOOLEAN wifi_Connect(void)
 {
     EventBits_t events = 0;
     FW_BOOLEAN result = FW_FALSE;
     
     /* Register event handlers */
-    HNDLR_REG(WIFI_EVENT, WIFI_EVENT_STA_CONNECTED, &vWiFi_OnConnected);
-    HNDLR_REG(IP_EVENT, IP_EVENT_STA_GOT_IP, &vWiFi_OnGotIp);
-    HNDLR_REG(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, &vWiFi_OnDisconnected);
+    //HNDLR_REG(WIFI_EVENT, WIFI_EVENT_STA_CONNECTED, &vWiFi_OnConnected);
+    //HNDLR_REG(IP_EVENT, IP_EVENT_STA_GOT_IP, &vWiFi_OnGotIp);
+    //HNDLR_REG(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, &vWiFi_OnDisconnected);
     
     /* Connect */
     ESP_LOGI(TAG, "Connecting to \"%s\"...", WIFI_SSID);
     ESP_ERROR_CHECK(esp_wifi_connect());
     
     /* Wait for connection */
-    events = vWiFi_WaitFor(EVT_WIFI_DISCONNECTED | EVT_WIFI_GOT_IP, 10000);
+    events = wifi_WaitFor(EVT_WIFI_DISCONNECTED | EVT_WIFI_GOT_IP, 10000);
     if (0 != (events & EVT_WIFI_GOT_IP))
     {
         ESP_LOGI(TAG, "Connected successfuly");
@@ -198,40 +233,41 @@ static FW_BOOLEAN vWiFi_Connect(void)
     }
     
     /* Unregister event handlers */
-    HNDLR_UNREG(WIFI_EVENT, WIFI_EVENT_STA_CONNECTED, &vWiFi_OnConnected);
-    HNDLR_UNREG(IP_EVENT, IP_EVENT_STA_GOT_IP, &vWiFi_OnGotIp);
+    //HNDLR_UNREG(WIFI_EVENT, WIFI_EVENT_STA_CONNECTED, &vWiFi_OnConnected);
+    //HNDLR_UNREG(IP_EVENT, IP_EVENT_STA_GOT_IP, &vWiFi_OnGotIp);
     
-    if (FW_FALSE == result)
-    {
-        HNDLR_UNREG(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, &vWiFi_OnDisconnected);
-    }
+    //if (FW_FALSE == result)
+    //{
+    //    HNDLR_UNREG(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, &vWiFi_OnDisconnected);
+    //}
 
     return result;
 }
 
 //-------------------------------------------------------------------------------------------------
 
-static void vWiFi_WaitForDisconnect(void)
+static void wifi_WaitForDisconnect(void)
 {
-    (void)vWiFi_WaitFor(EVT_WIFI_DISCONNECTED, portMAX_DELAY);
+    (void)wifi_WaitFor(EVT_WIFI_DISCONNECTED, portMAX_DELAY);
     
     /* Unregister event handler */
-    HNDLR_UNREG(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, &vWiFi_OnDisconnected);
+    //HNDLR_UNREG(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, &vWiFi_OnDisconnected);
 }
 
 //-------------------------------------------------------------------------------------------------
 
-void vWiFi_Task(void * pvParams)
+static void wifi_Task(void * pvParams)
 {
-    vWiFi_Start();
+    wifi_Start();
 
     while (FW_TRUE)
     {
-        if (FW_TRUE == vWiFi_Connect())
+        if (FW_TRUE == wifi_Connect())
         {
-            UDP_NotifyWiFiIsConnected();
-            vWiFi_WaitForDisconnect();
+//            UDP_NotifyWiFiIsConnected(gIpAddr);
+            wifi_WaitForDisconnect();
         }
+//        UDP_NotifyWiFiIsDisconnected();
         vTaskDelay(10000 / portTICK_RATE_MS);
     }
 }
@@ -245,7 +281,7 @@ void WIFI_Task_Init(void)
     /* Create the events group for WiFi task */
     gWiFiEvents = xEventGroupCreate();
 
-    xTaskCreate(vWiFi_Task, "WiFi", 4096, NULL, 5, NULL);
+    xTaskCreate(wifi_Task, "WiFi", 4096, NULL, 5, NULL);
 }
 
 //-------------------------------------------------------------------------------------------------
