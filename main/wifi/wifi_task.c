@@ -264,10 +264,10 @@ static void wifi_Task(void * pvParams)
     {
         if (FW_TRUE == wifi_Connect())
         {
-//            UDP_NotifyWiFiIsConnected(gIpAddr);
+            UDP_NotifyWiFiIsConnected(gIpAddr);
             wifi_WaitForDisconnect();
         }
-//        UDP_NotifyWiFiIsDisconnected();
+        UDP_NotifyWiFiIsDisconnected();
         vTaskDelay(10000 / portTICK_RATE_MS);
     }
 }
