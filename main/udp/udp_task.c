@@ -17,6 +17,7 @@
 #include <lwip/netdb.h>
 
 #include "types.h"
+#include "led_strip.h"
 
 //-------------------------------------------------------------------------------------------------
 
@@ -34,12 +35,21 @@ typedef struct
     uint16_t cmark;
 } udp_packet_pingpong_t;
 
+typedef struct
+{
+    uint8_t type;
+    uint8_t r;
+    uint8_t g;
+    uint8_t b;
+} udp_packet_set_color_t;
+
 //-------------------------------------------------------------------------------------------------
 
 static const char *       TAG              = "UDP";
 static EventGroupHandle_t gUdpEvents       = NULL;
 static uint32_t           gIpAddr          = 0;
 static uint8_t            gUdpBuffer[1024] = {0};
+static uint8_t            gLedStrip[16*3]  = {0};
 
 //-------------------------------------------------------------------------------------------------
 
@@ -272,23 +282,41 @@ static void vUDP_Task(void * pvParameters)
             //}
             // Data received
             //else
-            if (0 < len)
+
+            udp_packet_set_color_t * packet = (udp_packet_set_color_t *)gUdpBuffer;
+            if ((sizeof(udp_packet_set_color_t) == len) && (0 == packet->type))
             {
                 // Get the sender's ip address as string
-                inet_ntoa_r(((struct sockaddr_in *)&cltAddr)->sin_addr.s_addr, addr_str, sizeof(addr_str) - 1);
+                inet_ntoa_r(((struct sockaddr_in *)&svrAddr)->sin_addr.s_addr, addr_str, sizeof(addr_str) - 1);
 
-                //gUdpBuffer[len] = 0; // Null-terminate whatever we received and treat like a string...
-                ESP_LOGI(TAG, "Received %d bytes from %s:", len, addr_str);
-                //ESP_LOGI(TAG, "%s", rx_buffer);
-                ESP_LOGI(TAG, "Rcvd %d bytes: %02X %02X", len, gUdpBuffer[0], gUdpBuffer[1]);
+                ESP_LOGI(TAG, "Received %d bytes from %s", len, addr_str);
 
-                //int err = sendto(sock, rx_buffer, len, 0, (struct sockaddr *)&sourceAddr, sizeof(sourceAddr));
-                //if (err < 0)
-                //{
-                //    ESP_LOGE(TAG, "Error occured during sending: errno %d", errno);
-                //    break;
-                //}
+                for (uint8_t idx = 0; idx < sizeof(gLedStrip); idx += 3)
+                {
+                    gLedStrip[idx + 0] = packet->r;
+                    gLedStrip[idx + 1] = packet->g;
+                    gLedStrip[idx + 2] = packet->b;
+                }
+                LED_Strip_Update();
             }
+
+            //if (0 < len)
+            //{
+            //    // Get the sender's ip address as string
+            //    inet_ntoa_r(((struct sockaddr_in *)&cltAddr)->sin_addr.s_addr, addr_str, sizeof(addr_str) - 1);
+//
+            //    //gUdpBuffer[len] = 0; // Null-terminate whatever we received and treat like a string...
+            //    ESP_LOGI(TAG, "Received %d bytes from %s:", len, addr_str);
+            //    //ESP_LOGI(TAG, "%s", rx_buffer);
+            //    ESP_LOGI(TAG, "Rcvd %d bytes: %02X %02X", len, gUdpBuffer[0], gUdpBuffer[1]);
+//
+            //    //int err = sendto(sock, rx_buffer, len, 0, (struct sockaddr *)&sourceAddr, sizeof(sourceAddr));
+            //    //if (err < 0)
+            //    //{
+            //    //    ESP_LOGE(TAG, "Error occured during sending: errno %d", errno);
+            //    //    break;
+            //    //}
+            //}
 
 
 
@@ -329,6 +357,8 @@ void UDP_Task_Init(void)
 {
     /* Create the events group for UDP task */
     gUdpEvents = xEventGroupCreate();
+
+    LED_Strip_Init(gLedStrip, sizeof(gLedStrip));
 
     xTaskCreate(vUDP_Task, "UDP", 4096, NULL, 5, NULL);
 }

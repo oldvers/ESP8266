@@ -3,5 +3,5 @@
 #
 # (Uses default behaviour of compiling all source files in directory, adding 'include' to include path.)
 
-COMPONENT_SRCDIRS := . east block_queue wifi udp
-COMPONENT_ADD_INCLUDEDIRS := . east/include block_queue/include wifi/include udp/include
+COMPONENT_SRCDIRS := . east block_queue wifi udp led_strip
+COMPONENT_ADD_INCLUDEDIRS := . east/include block_queue/include wifi/include udp/include led_strip/include
