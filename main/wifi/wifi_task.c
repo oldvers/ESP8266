@@ -256,6 +256,8 @@ static void wifi_WaitForDisconnect(void)
 
 //-------------------------------------------------------------------------------------------------
 
+extern void user_init(void);
+
 static void wifi_Task(void * pvParams)
 {
     wifi_Start();
@@ -264,10 +266,11 @@ static void wifi_Task(void * pvParams)
     {
         if (FW_TRUE == wifi_Connect())
         {
-            UDP_NotifyWiFiIsConnected(gIpAddr);
+            user_init();
+//            UDP_NotifyWiFiIsConnected(gIpAddr);
             wifi_WaitForDisconnect();
         }
-        UDP_NotifyWiFiIsDisconnected();
+//        UDP_NotifyWiFiIsDisconnected();
         vTaskDelay(10000 / portTICK_RATE_MS);
     }
 }
