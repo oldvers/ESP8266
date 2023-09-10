@@ -22,8 +22,15 @@ static void print_info(void)
     esp_chip_info_t chip_info = {0};
     char *          string    = NULL;
     uint32_t        value     = 0;
+    uint8_t         mac[6]    = {0};
+    esp_err_t       error     = ESP_OK;
 
+    /* Retrieve the chip info */
     esp_chip_info(&chip_info);
+
+    /* Retrieve the default MAC address */
+    error = esp_efuse_mac_get_default(mac);
+    ESP_ERROR_CHECK(error);
 
     printf("--- ESP8266 chip with %d CPU cores and WiFi ---\n", chip_info.cores);
     printf("  - Silicon revision %d\n", chip_info.revision);
@@ -39,6 +46,7 @@ static void print_info(void)
     printf("  - Flash %d MB : %s\n", value, string);
     value = esp_clk_cpu_freq() / (1024 * 1024);
     printf("  - CPU Frequency %d MHz\n", value);
+    printf("  - MAC %02X:%02X:%02X:%02X:%02X:%02X\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 
     fflush(stdout);
 }
@@ -51,5 +59,5 @@ void app_main()
     /* Initialize the tasks */
     //EAST_Task_Init();
     WIFI_Task_Init();
-    UDP_Task_Init();
+    //UDP_Task_Init();
 }

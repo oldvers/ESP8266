@@ -19,7 +19,8 @@
 //-------------------------------------------------------------------------------------------------
 
 #define WIFI_SSID                "HomeWLAN"
-#define WIFI_PASS                "wlanH020785endrix!"
+#define WIFI_PSWD                "wlanH020785endrix!"
+#define WIFI_SITE                "home.com"
 #define EVT_WIFI_STARTED         BIT0
 #define EVT_WIFI_CONNECTED       BIT1
 #define EVT_WIFI_GOT_IP          BIT2
@@ -27,9 +28,23 @@
 
 //-------------------------------------------------------------------------------------------------
 
-static const char *       TAG         = "WiFi";
-static EventGroupHandle_t gWiFiEvents = NULL;
-static uint32_t           gIpAddr     = 0;
+typedef struct
+{
+    uint16_t ssid_len;
+    char     ssid[32];
+    uint16_t pswd_len;
+    char     pswd[32];
+    uint16_t site_len;
+    char     site[32];
+    bool     valid;
+} wifi_conn_params_t;
+
+//-------------------------------------------------------------------------------------------------
+
+static const char *       TAG             = "WiFi";
+static EventGroupHandle_t gWiFiEvents     = NULL;
+static uint32_t           gIpAddr         = 0;
+static wifi_conn_params_t gWiFiConnParams = {0};
 
 //-------------------------------------------------------------------------------------------------
 
@@ -185,7 +200,7 @@ static void wifi_Start(void)
         .sta =
         {
             .ssid = WIFI_SSID,
-            .password = WIFI_PASS
+            .password = WIFI_PSWD
         },
     };
 
@@ -256,6 +271,129 @@ static void wifi_WaitForDisconnect(void)
 
 //-------------------------------------------------------------------------------------------------
 
+static bool wifi_LoadParams(wifi_conn_params_t * p_params)
+{
+    nvs_handle         h_nvs  = 0;
+    esp_err_t          status = ESP_OK;
+    wifi_conn_params_t params = {0};
+    size_t             length = 0;
+    bool               result = false;
+
+    status = nvs_flash_init();
+    ESP_ERROR_CHECK(status);
+
+    status = nvs_open("wifi", NVS_READONLY, &h_nvs);
+    if (ESP_OK == status)
+    {
+        do
+        {
+            memset(&params, 0, sizeof(params));
+
+            length = sizeof(params.ssid);
+            status = nvs_get_str(h_nvs, "ssid", params.ssid, &length);
+            if (ESP_OK != status) break;
+            params.ssid_len = length;
+
+            length = sizeof(params.pswd);
+            status = nvs_get_str(h_nvs, "pswd", params.pswd, &length);
+            if (ESP_OK != status) break;
+            params.pswd_len = length;
+
+            length = sizeof(params.site);
+            status = nvs_get_str(h_nvs, "site", params.site, &length);
+            if (ESP_OK != status) break;
+            params.site_len = length;
+
+            result = true;
+        }
+        while (0);
+    }
+
+    if (true == result)
+    {
+        memcpy(p_params, &params, sizeof(*p_params));
+        p_params->valid = true;
+
+        ESP_LOGI
+        (
+            TAG, "Restored params:\n  - SSID:%d:%s\n  - PSWD:%d:%s\n  - SITE:%d:%s",
+            params.ssid_len, params.ssid,
+            params.pswd_len, params.pswd,
+            params.site_len, params.site
+        );
+    }
+    else
+    {
+        ESP_LOGI(TAG, "No stored params");
+    }
+
+    nvs_close(h_nvs);
+
+    return result;
+}
+
+//-------------------------------------------------------------------------------------------------
+
+static void wifi_SaveParams(wifi_conn_params_t * p_params)
+{
+    nvs_handle h_nvs  = 0;
+    esp_err_t  status = ESP_OK;
+
+    status = nvs_flash_init();
+    ESP_ERROR_CHECK(status);
+
+    status = nvs_open("wifi", NVS_READWRITE, &h_nvs);
+    ESP_ERROR_CHECK(status);
+
+    status = nvs_set_str(h_nvs, "ssid", p_params->ssid);
+    ESP_ERROR_CHECK(status);
+
+    status = nvs_set_str(h_nvs, "pswd", p_params->pswd);
+    ESP_ERROR_CHECK(status);
+
+    status = nvs_set_str(h_nvs, "site", p_params->site);
+    ESP_ERROR_CHECK(status);
+
+    ESP_LOGI
+    (
+        TAG, "Stored params:\n  - SSID:%d:%s\n  - PSWD:%d:%s\n  - SITE:%d:%s",
+        p_params->ssid_len, p_params->ssid,
+        p_params->pswd_len, p_params->pswd,
+        p_params->site_len, p_params->site
+    );
+
+    nvs_close(h_nvs);
+}
+
+//-------------------------------------------------------------------------------------------------
+
+static void wifi_ClearParams(void)
+{
+    nvs_handle h_nvs  = 0;
+    esp_err_t  status = ESP_OK;
+
+    status = nvs_flash_init();
+    ESP_ERROR_CHECK(status);
+
+    status = nvs_open("wifi", NVS_READWRITE, &h_nvs);
+    ESP_ERROR_CHECK(status);
+
+    status = nvs_erase_key(h_nvs, "ssid");
+    ESP_ERROR_CHECK(status);
+
+    status = nvs_erase_key(h_nvs, "pswd");
+    ESP_ERROR_CHECK(status);
+
+    status = nvs_erase_key(h_nvs, "site");
+    ESP_ERROR_CHECK(status);
+
+    ESP_LOGI(TAG, "Cleared params");
+
+    nvs_close(h_nvs);
+}
+
+//-------------------------------------------------------------------------------------------------
+
 extern void user_init(void);
 
 static void wifi_Task(void * pvParams)
@@ -279,12 +417,23 @@ static void wifi_Task(void * pvParams)
 
 void WIFI_Task_Init(void)
 {
-    ESP_ERROR_CHECK(nvs_flash_init());
+    /* Load WiFi parameters */
+    if (false == wifi_LoadParams(&gWiFiConnParams))
+    {
+//        memcpy(gWiFiConnParams.ssid, WIFI_SSID, sizeof(WIFI_SSID));
+//        gWiFiConnParams.ssid_len = strlen(WIFI_SSID);
+//        memcpy(gWiFiConnParams.pswd, WIFI_PSWD, sizeof(WIFI_PSWD));
+//        gWiFiConnParams.pswd_len = strlen(WIFI_PSWD);
+//        memcpy(gWiFiConnParams.site, WIFI_SITE, sizeof(WIFI_SITE));
+//        gWiFiConnParams.pswd_len = strlen(WIFI_PSWD);
+//
+//        wifi_ClearParams();
+    }
 
     /* Create the events group for WiFi task */
     gWiFiEvents = xEventGroupCreate();
 
-    xTaskCreate(wifi_Task, "WiFi", 4096, NULL, 5, NULL);
+    //xTaskCreate(wifi_Task, "WiFi", 4096, NULL, 5, NULL);
 }
 
 //-------------------------------------------------------------------------------------------------
