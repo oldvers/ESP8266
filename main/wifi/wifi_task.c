@@ -15,6 +15,7 @@
 
 #include "types.h"
 #include "udp_task.h"
+#include "udp_dns_server.h"
 
 //-------------------------------------------------------------------------------------------------
 
@@ -124,7 +125,7 @@ static void wifi_ST_OnGotIp
     void* event_data
 )
 {
-    ip_event_got_ip_t * event = (ip_event_got_ip_t*)event_data;
+    ip_event_got_ip_t * event = (ip_event_got_ip_t *)event_data;
 
     gIpAddr = event->ip_info.ip.addr;
     //ESP_LOGI(TAG, "Got IP: " IPSTR, IP2STR(&event->ip_info.ip));
@@ -225,10 +226,11 @@ static void wifi_RegisterHandlers(void)
 
 static void wifi_Start(void)
 {
-    wifi_config_t wifi_config = {0};
-    uint8_t       mac[6]      = {0};
-    char          ap_ssid[32] = {0};
-    int           length      = 0;
+    tcpip_adapter_ip_info_t ip_info     = {0};
+    wifi_config_t           wifi_config = {0};
+    uint8_t                 mac[6]      = {0};
+    char                    ap_ssid[32] = {0};
+    int                     length      = 0;
 
     /* Prepare the events loop */
     tcpip_adapter_init();
@@ -265,7 +267,7 @@ static void wifi_Start(void)
 
         (void)wifi_WaitFor(EVT_WIFI_ST_STARTED, portMAX_DELAY);
 
-        ESP_ERROR_CHECK(tcpip_adapter_set_hostname(TCPIP_ADAPTER_IF_STA, "testing"));
+        //ESP_ERROR_CHECK(tcpip_adapter_set_hostname(TCPIP_ADAPTER_IF_STA, "testing"));
     }
     else
     /* Access Point mode */
@@ -294,7 +296,12 @@ static void wifi_Start(void)
         ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_AP, &wifi_config));
         ESP_ERROR_CHECK(esp_wifi_start());
 
-        ESP_ERROR_CHECK(tcpip_adapter_set_hostname(TCPIP_ADAPTER_IF_AP, "testing"));
+        ESP_ERROR_CHECK(tcpip_adapter_get_ip_info(TCPIP_ADAPTER_IF_AP, &ip_info));
+        gIpAddr = ip_info.ip.addr;
+        //ESP_LOGI(TAG, "Got IP: " IPSTR, IP2STR(&event->ip_info.ip));
+        ESP_LOGI(TAG, "AP IP : %s", ip4addr_ntoa(&ip_info.ip));
+
+        //ESP_ERROR_CHECK(tcpip_adapter_set_hostname(TCPIP_ADAPTER_IF_AP, "testing"));
     }
 }
 
@@ -498,11 +505,11 @@ static void wifi_Task(void * pvParams)
     {
         if (FW_TRUE == wifi_Connect())
         {
-//            user_init();
-//            UDP_NotifyWiFiIsConnected(gIpAddr);
+            UDP_DNS_NotifyWiFiIsConnected(gIpAddr);
+            user_init();
             wifi_WaitForDisconnect();
         }
-//        UDP_NotifyWiFiIsDisconnected();
+        UDP_DNS_NotifyWiFiIsDisconnected();
         vTaskDelay(10000 / portTICK_RATE_MS);
     }
 }

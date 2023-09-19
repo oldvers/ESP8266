@@ -1,0 +1,3 @@
+call PrepareEnvironment.bat
+
+code .

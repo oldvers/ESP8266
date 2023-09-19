@@ -287,7 +287,7 @@ static void vUDP_Task(void * pvParameters)
             if ((sizeof(udp_packet_set_color_t) == len) && (0 == packet->type))
             {
                 // Get the sender's ip address as string
-                inet_ntoa_r(((struct sockaddr_in *)&svrAddr)->sin_addr.s_addr, addr_str, sizeof(addr_str) - 1);
+                inet_ntoa_r(((struct sockaddr_in *)&cltAddr)->sin_addr.s_addr, addr_str, sizeof(addr_str) - 1);
 
                 ESP_LOGI(TAG, "Received %d bytes from %s", len, addr_str);
 

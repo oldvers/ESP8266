@@ -21,7 +21,8 @@ set( srcs
      "httpd/fs.c"
      "httpd/httpd.c"
      "httpd/strcasestr.c"
-     "http_server/http_server.c" )
+     "http_server/http_server.c"
+     "udp/udp_dns_server.c" )
 
 if(NOT CMAKE_BUILD_EARLY_EXPANSION)
     add_definitions("-DLWIP_HTTPD_CGI=1")

@@ -57,7 +57,7 @@
             "args": [
                 "${env:IDF_PATH}\\tools\\idf.py",
                 "-p",
-                "COM5",
+                "COM64",
                 "-b",
                 "921600",
                 "flash"
