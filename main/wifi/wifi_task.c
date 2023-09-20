@@ -495,8 +495,6 @@ static void wifi_ClearParams(void)
 
 //-------------------------------------------------------------------------------------------------
 
-extern void user_init(void);
-
 static void wifi_Task(void * pvParams)
 {
     wifi_Start();
@@ -506,7 +504,6 @@ static void wifi_Task(void * pvParams)
         if (FW_TRUE == wifi_Connect())
         {
             UDP_DNS_NotifyWiFiIsConnected(gIpAddr);
-            user_init();
             wifi_WaitForDisconnect();
         }
         UDP_DNS_NotifyWiFiIsDisconnected();

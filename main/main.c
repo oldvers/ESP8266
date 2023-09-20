@@ -52,6 +52,8 @@ static void print_info(void)
     fflush(stdout);
 }
 
+extern void user_init(void);
+
 void app_main()
 {
     /* Print chip information */
@@ -59,6 +61,7 @@ void app_main()
 
     /* Initialize the tasks */
     //EAST_Task_Init();
+    user_init();
     WIFI_Task_Init();
     UDP_DNS_Task_Init();
 }
