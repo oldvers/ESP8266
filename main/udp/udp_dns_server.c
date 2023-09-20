@@ -392,7 +392,8 @@ static const char * gURL[] =
     "apple.com",
     "microsoft.com",
     "msftncsi.com",
-    "msft"
+    "msft",
+    "gstatic.com"
 };
 
 static int dns_ProcessRequest(uint8_t * p_buf, uint16_t size)

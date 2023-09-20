@@ -1690,6 +1690,67 @@ http_get_404_file(struct http_state *hs, const char **uri)
   return &hs->file_handle;
 }
 
+static struct fs_file *
+http_get_inet_or_redirect_file(struct http_state * hs, const char ** uri)
+{
+    static const char redirect[]   = "HTTP/1.0 302 Moved Temporarily\r\nContent-Length: 0\r\nLocation: http://www.home.com\r\n\r\n";
+//    static const char no_content[] = "HTTP/1.0 204 No content\r\nAccess-Control-Allow-Origin: *\r\nContent-Length: 0\r\n\r\n";
+//    static const char ncsi[]       = "HTTP/1.0 200 OK\r\nAccess-Control-Allow-Origin: *\r\nContent-Type: text/plain\r\nContent-Length: 14\r\n\r\nMicrosoft NCSI";
+//    static const char conntest[]   = "HTTP/1.0 200 OK\r\nAccess-Control-Allow-Origin: *\r\nContent-Type: text/plain\r\nContent-Length: 22\r\n\r\nMicrosoft Connect Test";
+    
+
+    struct fs_file *      result = NULL;
+    static struct fs_file file   = {0};
+
+//    LWIP_DEBUGF(HTTPD_DEBUG | LWIP_DBG_TRACE, ("InetRedirect\n", uri));
+
+    if ((NULL != strstr(*uri, "generate_204")) || (NULL != strstr(*uri, "gen_204")))
+    {
+        file.data  = redirect; //no_content;
+        file.len   = (sizeof(redirect) - 1); //no_content) - 1);
+        result     = &file;
+    }
+    else if (NULL != strstr(*uri, "ncsi.txt"))
+    {
+        file.data  = redirect; //ncsi;
+        file.len   = (sizeof(redirect) - 1); //ncsi) - 1);
+        result     = &file;
+    }
+    else if (NULL != strstr(*uri, "connecttest.txt"))
+    {
+        file.data  = redirect; //conntest;
+        file.len   = (sizeof(redirect) - 1 ); //conntest) - 1);
+        result     = &file;
+    }
+    else if (NULL != strstr(*uri, "redirect"))
+    {
+        *uri = "/index.html";
+        err_t err = fs_open(&hs->file_handle, *uri);
+        if (err == ERR_OK)
+        {
+            result = &hs->file_handle;
+            //*uri = NULL;
+            //return NULL;
+        }
+    }
+
+    if (NULL != result)
+    {
+        file.index = file.len;
+        file.pextension = NULL;
+        file.http_header_included = 1;
+#if HTTPD_PRECALCULATED_CHECKSUM
+        file->chksum_count = f->chksum_count;
+        file->chksum = f->chksum;
+#endif /* HTTPD_PRECALCULATED_CHECKSUM */
+#if LWIP_HTTPD_FILE_STATE
+        file->state = fs_state_init(file, name);
+#endif /* #if LWIP_HTTPD_FILE_STATE */
+    }
+
+    return result;
+}
+
 #if LWIP_HTTPD_SUPPORT_POST
 static err_t
 http_handle_post_finished(struct http_state *hs)
@@ -2220,9 +2281,16 @@ http_find_file(struct http_state *hs, const char *uri, int is_09)
     LWIP_DEBUGF(HTTPD_DEBUG | LWIP_DBG_TRACE, ("Opening %s\n", uri));
 
     err = fs_open(&hs->file_handle, uri);
-    if (err == ERR_OK) {
+    if (err == ERR_OK)
+    {
        file = &hs->file_handle;
-    } else {
+    }
+    else if (NULL != (file = http_get_inet_or_redirect_file(hs, &uri)))
+    {
+      //
+    }
+    else
+    {
       file = http_get_404_file(hs, &uri);
     }
 #if LWIP_HTTPD_SSI
