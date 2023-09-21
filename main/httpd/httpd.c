@@ -2481,8 +2481,7 @@ websocket_register_callbacks(tWsOpenHandler ws_open_cb, tWsHandler ws_cb)
   websocket_cb = ws_cb;
 }
 
-err_t
-websocket_write(struct tcp_pcb *pcb, const uint8_t *data, uint16_t len, uint8_t mode)
+err_t websocket_write(struct tcp_pcb * pcb, const uint8_t * data, uint16_t len, uint8_t mode)
 {
   uint8_t *buf = mem_malloc(len + 4);
   if (buf == NULL) {

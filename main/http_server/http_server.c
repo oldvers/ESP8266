@@ -21,7 +21,8 @@
 
 #define LED_PIN 2
 
-enum {
+enum
+{
     SSI_UPTIME,
     SSI_FREE_HEAP,
     SSI_LED_STATE
@@ -29,16 +30,16 @@ enum {
 
 int32_t ssi_handler(int32_t iIndex, char * pcInsert, int32_t iInsertLen)
 {
-    switch (iIndex) {
+    switch (iIndex)
+    {
         case SSI_UPTIME:
-            snprintf(pcInsert, iInsertLen, "%d",
-                    xTaskGetTickCount() * portTICK_PERIOD_MS / 1000);
+            snprintf(pcInsert, iInsertLen, "%d", xTaskGetTickCount() * portTICK_PERIOD_MS / 1000);
             break;
         case SSI_FREE_HEAP:
-            snprintf(pcInsert, iInsertLen, "%d", 35000); //(int) xPortGetFreeHeapSize());
+            snprintf(pcInsert, iInsertLen, "%d", 35000); // (int) xPortGetFreeHeapSize());
             break;
         case SSI_LED_STATE:
-            snprintf(pcInsert, iInsertLen, "Off"); //gpio_get_level(LED_PIN) ? "Off" : "On");
+            snprintf(pcInsert, iInsertLen, "Off"); // gpio_get_level(LED_PIN) ? "Off" : "On");
             break;
         default:
             snprintf(pcInsert, iInsertLen, "N/A");
@@ -49,32 +50,38 @@ int32_t ssi_handler(int32_t iIndex, char * pcInsert, int32_t iInsertLen)
     return (strlen(pcInsert));
 }
 
-char *gpio_cgi_handler(int iIndex, int iNumParams, char * pcParam[], char *pcValue[])
+char * gpio_cgi_handler(int iIndex, int iNumParams, char * pcParam[], char * pcValue[])
 {
-    for (int i = 0; i < iNumParams; i++) {
-        if (strcmp(pcParam[i], "on") == 0) {
+    for (int i = 0; i < iNumParams; i++)
+    {
+        if (strcmp(pcParam[i], "on") == 0)
+        {
             uint8_t gpio_num = atoi(pcValue[i]);
-//            gpio_enable(gpio_num, GPIO_OUTPUT);
-//            gpio_write(gpio_num, true);
-        } else if (strcmp(pcParam[i], "off") == 0) {
+//          gpio_enable(gpio_num, GPIO_OUTPUT);
+//          gpio_write(gpio_num, true);
+        }
+        else if (strcmp(pcParam[i], "off") == 0)
+        {
             uint8_t gpio_num = atoi(pcValue[i]);
-//            gpio_enable(gpio_num, GPIO_OUTPUT);
-//            gpio_write(gpio_num, false);
-        } else if (strcmp(pcParam[i], "toggle") == 0) {
+//          gpio_enable(gpio_num, GPIO_OUTPUT);
+//          gpio_write(gpio_num, false);
+        }
+        else if (strcmp(pcParam[i], "toggle") == 0)
+        {
             uint8_t gpio_num = atoi(pcValue[i]);
-//            gpio_enable(gpio_num, GPIO_OUTPUT);
-//            gpio_toggle(gpio_num);
+//          gpio_enable(gpio_num, GPIO_OUTPUT);
+//          gpio_toggle(gpio_num);
         }
     }
     return "/index.ssi";
 }
 
-char *about_cgi_handler(int iIndex, int iNumParams, char *pcParam[], char *pcValue[])
+char * about_cgi_handler(int iIndex, int iNumParams, char * pcParam[], char * pcValue[])
 {
     return "/about.html";
 }
 
-char *websocket_cgi_handler(int iIndex, int iNumParams, char * pcParam[], char * pcValue[])
+char * websocket_cgi_handler(int iIndex, int iNumParams, char * pcParam[], char * pcValue[])
 {
     return "/websockets.html";
 }
@@ -83,8 +90,10 @@ void websocket_task(void * pvParameter)
 {
     struct tcp_pcb * pcb = (struct tcp_pcb *) pvParameter;
 
-    for (;;) {
-        if (pcb == NULL || pcb->state != ESTABLISHED) {
+    for (;;)
+    {
+        if (pcb == NULL || pcb->state != ESTABLISHED)
+        {
             printf("Connection closed, deleting task\n");
             break;
         }
@@ -100,7 +109,9 @@ void websocket_task(void * pvParameter)
                 " \"heap\" : \"%d\","
                 " \"led\" : \"%d\"}", uptime, heap, led);
         if (len < sizeof (response))
+        {
             websocket_write(pcb, (unsigned char *) response, len, WS_TEXT_MODE);
+        }
 
         vTaskDelay(2000 / portTICK_PERIOD_MS);
     }
@@ -116,24 +127,28 @@ void websocket_task(void * pvParameter)
  */
 void websocket_cb(struct tcp_pcb * pcb, uint8_t * data, uint16_t data_len, uint8_t mode)
 {
-    printf("[websocket_callback]:\n%.*s\n", (int) data_len, (char*) data);
+    printf("[websocket_callback]:\n%.*s\n", (int)data_len, (char *)data);
 
-    uint8_t response[2];
-    uint16_t val;
-    uint32_t rnd;
+    uint8_t  response[2] = {0};
+    uint16_t val         = 0;
+    uint32_t rnd         = 0;
 
-    switch (data[0]) {
+    switch (data[0])
+    {
+        case 0x01:
+            printf("The config received!\n");
+            break;
         case 'A': // ADC
             /* This should be done on a separate thread in 'real' applications */
             rnd = esp_random();
-            val = (rnd >> 22); //sdk_system_adc_read();
+            val = (rnd >> 22); // sdk_system_adc_read();
             break;
         case 'D': // Disable LED
-//            gpio_write(LED_PIN, true);
+//          gpio_write(LED_PIN, true);
             val = 0xDEAD;
             break;
         case 'E': // Enable LED
-//            gpio_write(LED_PIN, false);
+//          gpio_write(LED_PIN, false);
             val = 0xBEEF;
             break;
         default:
@@ -155,21 +170,24 @@ void websocket_cb(struct tcp_pcb * pcb, uint8_t * data, uint16_t data_len, uint8
 void websocket_open_cb(struct tcp_pcb * pcb, const char * uri)
 {
     printf("WS URI: %s\n", uri);
-    if (!strcmp(uri, "/stream")) {
+    if (!strcmp(uri, "/stream"))
+    {
         printf("request for streaming\n");
-        xTaskCreate(&websocket_task, "websocket_task", 1024, (void *) pcb, 2, NULL);
+        xTaskCreate(&websocket_task, "websocket_task", 1024, (void *)pcb, 2, NULL);
     }
 }
 
 void httpd_task(void * pvParameters)
 {
-    tCGI pCGIs[] = {
+    tCGI pCGIs[] =
+    {
         {"/gpio", (tCGIHandler) gpio_cgi_handler},
         {"/about", (tCGIHandler) about_cgi_handler},
         {"/websockets", (tCGIHandler) websocket_cgi_handler},
     };
 
-    const char *pcConfigSSITags[] = {
+    const char * pcConfigSSITags[] =
+    {
         "uptime", // SSI_UPTIME
         "heap",   // SSI_FREE_HEAP
         "led"     // SSI_LED_STATE
@@ -177,10 +195,17 @@ void httpd_task(void * pvParameters)
 
     /* register handlers and start the server */
     http_set_cgi_handlers(pCGIs, sizeof (pCGIs) / sizeof (pCGIs[0]));
-    http_set_ssi_handler((tSSIHandler) ssi_handler, pcConfigSSITags,
-            sizeof (pcConfigSSITags) / sizeof (pcConfigSSITags[0]));
-    websocket_register_callbacks((tWsOpenHandler) websocket_open_cb,
-            (tWsHandler) websocket_cb);
+    http_set_ssi_handler
+    (
+        (tSSIHandler) ssi_handler,
+        pcConfigSSITags,
+        sizeof (pcConfigSSITags) / sizeof (pcConfigSSITags[0])
+    );
+    websocket_register_callbacks
+    (
+        (tWsOpenHandler) websocket_open_cb,
+        (tWsHandler) websocket_cb
+    );
     httpd_init();
 
     for (;;)
