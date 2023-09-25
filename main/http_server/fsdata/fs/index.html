@@ -17,16 +17,16 @@
 				<div id="status_box" class="alert is-secondary">Starting...</div>
                 <h4>Connection parameters</h4>
                 <div class="has-mb-4">
-                    <label class="label">WiFi SSID (Name)</label>
-                    <input id="ssid" class="input" type="text" placeholder="HomeWLAN" />
+                    <label class="label">WiFi SSID (Router Name)</label>
+                    <input id="ssid" class="input" type="text" minlength="5" maxlength="32" placeholder="HomeWLAN" />
                 </div>
                 <div class="has-mb-4">
                     <label class="label">WiFi Password</label>
-                    <input id="pwd" class="input" type="text" placeholder="Password" />
+                    <input id="pwd" class="input" type="text" minlength="8" maxlength="32" placeholder="Password" />
                 </div>
                 <div class="has-mb-6">
                     <label class="label">Site Name</label>
-                    <input id="site" class="input" type="text" placeholder="WebAquaLight" />
+                    <input id="site" class="input" type="text" minlength="5" maxlength="32" placeholder="WebAquaLight" />
                 </div>
                 <button class="button is-full" onclick="onSaveBtnClick()">
                     <i class="si-lock has-pr-1"></i>
@@ -63,10 +63,18 @@
 
 		function onMessageFromServer(evt)
 		{
-			console.log("Message from server" + evt);
 			//retries = 0;
-			//var dv = new DataView(evt.data);
-			//var val = dv.getUint16(0);
+			let view    = new DataView(evt.data);
+			let command = view.getUint8(0);
+			let status  = view.getUint8(1);
+
+			console.log("Message from server" + view);
+			
+			if ((0x01 == command) && (0x00 == status))
+			{
+				console.log("Configuration saved!");
+				window.location.href = "complete";
+			}
 			//if (val == 0xBEEF || val == 0xDEAD)
 			//	console.log("LED switched");
 			//else
@@ -93,7 +101,7 @@
 			{
 				if (retries)
 				{
-					updateStatusBox("error", "Timeout!");
+					updateStatusBox("danger", "Timeout!");
 				}
 				else
 				{

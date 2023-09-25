@@ -76,9 +76,9 @@ char * gpio_cgi_handler(int iIndex, int iNumParams, char * pcParam[], char * pcV
     return "/index.ssi";
 }
 
-char * about_cgi_handler(int iIndex, int iNumParams, char * pcParam[], char * pcValue[])
+char * complete_cgi_handler(int iIndex, int iNumParams, char * pcParam[], char * pcValue[])
 {
-    return "/about.html";
+    return "/complete.html";
 }
 
 char * websocket_cgi_handler(int iIndex, int iNumParams, char * pcParam[], char * pcValue[])
@@ -137,6 +137,7 @@ void websocket_cb(struct tcp_pcb * pcb, uint8_t * data, uint16_t data_len, uint8
     {
         case 0x01:
             printf("The config received!\n");
+            val = 0x0100;
             break;
         case 'A': // ADC
             /* This should be done on a separate thread in 'real' applications */
@@ -182,7 +183,7 @@ void httpd_task(void * pvParameters)
     tCGI pCGIs[] =
     {
         {"/gpio", (tCGIHandler) gpio_cgi_handler},
-        {"/about", (tCGIHandler) about_cgi_handler},
+        {"/complete", (tCGIHandler) complete_cgi_handler},
         {"/websockets", (tCGIHandler) websocket_cgi_handler},
     };
 
