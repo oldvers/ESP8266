@@ -32,13 +32,13 @@
 #define PORT                     53
 #define EVT_WIFI_CONNECTED       BIT0
 
-/* QR
+/* QR.
  * A one bit field that specifies whether this message is a query or a response.
  */
 #define QR_QUERY     0
 #define QR_RESPONSE  1
 
-/* OPCODE
+/* OPCODE.
  * A four bit field that specifies kind of query in this message.
  */
 #define OPCODE_QUERY   0 /* A standard query. */
@@ -46,15 +46,33 @@
 #define OPCODE_STATUS  2 /* A server status request. */
 /* 3-15 reserved for future use. */
 
-/* AA
+/* AA.
  * A one bit, valid in responses, and specifies that the responding
  * name server is an authority for the domain name in question section.
  */
 #define AA_NONAUTHORITY  0
 #define AA_AUTHORITY     1
 
-/* Maximum domain name octet length without zero terminated char for this server */
+/* Maximum domain name octet length without zero terminated char for this server. */
 #define DNS_MAX_OCTET_LEN 60
+
+#define DNS_LOG  0
+
+#if (1 == DNS_LOG)
+#    define DNS_LOGI(...)  ESP_LOGI(TAG, __VA_ARGS__)
+#    define DNS_LOGE(...)  ESP_LOGI(TAG, __VA_ARGS__)
+#    define DNS_LOGV(...)
+#elif (2 == DNS_LOG)
+#    define DNS_LOGI(...)  ESP_LOGI(TAG, __VA_ARGS__)
+#    define DNS_LOGE(...)  ESP_LOGI(TAG, __VA_ARGS__)
+#    define DNS_LOGV(...)  ESP_LOGI(TAG, __VA_ARGS__)
+#else
+#    define DNS_LOGI(...)
+#    define DNS_LOGE(...)
+#    define DNS_LOGV(...)
+#endif
+
+//-------------------------------------------------------------------------------------------------
 
 /** DNS record types enumeration. */
 typedef enum
@@ -70,11 +88,9 @@ typedef enum
     DNS_TYPE_SRV   = 0x21,
 } dns_type_t;
 
-//-------------------------------------------------------------------------------------------------
-
 typedef struct dns_header
 {
-    uint16_t id;    /* a 16 bit identifier assigned by the client */
+    uint16_t id;    /* A 16 bit identifier assigned by the client, big endian. */
     /* Flags L */
     uint8_t  rd     : 1;
     uint8_t  tc     : 1;
@@ -85,7 +101,7 @@ typedef struct dns_header
     uint8_t  rcode  : 4;
     uint8_t  z      : 3;
     uint8_t  ra     : 1;
-    /* --- */
+    /* All fields should be filled with big endian. */
     uint16_t qdcount;
     uint16_t ancount;
     uint16_t nscount;
@@ -98,7 +114,7 @@ typedef struct dns_packet
     char         data[500];
 } dns_packet_t;
 
-/* DNS response header
+/* DNS response header.
  * All fields should be filled with big endian.
  */
 typedef struct __attribute__((packed))
@@ -112,6 +128,20 @@ typedef struct __attribute__((packed))
 
 //-------------------------------------------------------------------------------------------------
 
+static const char * gURL[] =
+{
+    "home.local",
+    "home.com",
+    "google.com",
+    "apple.com",
+    "microsoft.com",
+    "msftncsi.com",
+    "msft",
+    "gstatic.com"
+};
+
+//-------------------------------------------------------------------------------------------------
+
 static const char *       TAG              = "DNS";
 static EventGroupHandle_t gDnsEvents       = NULL;
 static uint32_t           gIpAddr          = 0;
@@ -119,59 +149,18 @@ static uint8_t            gDnsBuffer[1024] = {0};
 
 //-------------------------------------------------------------------------------------------------
 
-//typedef struct dns_response_packet
-//{
-//  char * name;
-//  int16_t type;
-//  int16_t class;
-//  int32_t ttl;
-//  int16_t rdlength;
-//  char * rdata;
-//} dns_response_packet_t;
-//
-//struct dns_question
-//{
-//  char * qname;
-//  int16_t qtype;
-//  int16_t qclass;
-//};
-
-//void dns_print_hader(struct dns_header *header);
-//void dns_print_paket(struct dns_packet *packet);
-
-//int dns_request_parse(dns_packet_t * p_pkt, int16_t size);
-//int dns_header_parse(struct dns_header *header, void *data);
-//int dns_question_parse(struct dns_packet *pkt);
-
-//void dns_print_header(dns_header_t * p_header)
-//{
-//    printf("ID: %d\n",     p_header->id);
-//    printf("qr: %d\n",     p_header->qr);
-//    printf("opcode: %d\n", p_header->opcode);
-//    printf("aa: %d\n",     p_header->aa);
-//    printf("tc: %d\n",     p_header->tc);
-//    printf("rd: %d\n",     p_header->rd);
-//    printf("ra: %d\n",     p_header->ra);
-//    printf("z: %d\n",      p_header->z);
-//    printf("rcode: %d\n",  p_header->rcode);
-//
-//    printf("qdcount: %d\n", p_header->qdcount);
-//    printf("ancount: %d\n", p_header->ancount);
-//    printf("nscount: %d\n", p_header->nscount);
-//    printf("arcount: %d\n", p_header->arcount);
-//}
-
-//void dns_print_packet(struct dns_packet * packet)
-//{
-//  dns_print_header(&packet->header);
-//  printf("data_size: %d\n", packet->data_size);
-//  printf("data: %s\n", packet->data);
-//}
-
-static int dns_ParseQuestion(dns_packet_t * p_pkt, uint16_t size, char * p_name, uint16_t * p_type, uint16_t * p_class)
+static int dns_ParseQuestion
+(
+    dns_packet_t * p_pkt,
+    uint16_t size,
+    char * p_name,
+    uint16_t * p_type,
+    uint16_t * p_class
+)
 {
     uint16_t i, length, j;
-    char * question = p_pkt->data;
+    char *   question               = p_pkt->data;
+    char     log[DNS_MAX_OCTET_LEN] = {0};
 
     if (DNS_MAX_OCTET_LEN < size)
     {
@@ -183,13 +172,14 @@ static int dns_ParseQuestion(dns_packet_t * p_pkt, uint16_t size, char * p_name,
 
     do
     {
-//        printf("  - Size: %d - Question: ", length);
         for (j = 0; j < length; j++)
         {
-//            printf("%c", question[i + j]);
             *p_name++ = question[i + j];
+            log[j] = question[i + j];
         }
-//        printf("\n");
+        log[j] = '\0';
+        DNS_LOGV("  - Size: %d - Question: %s", length, log);
+
         *p_name++ = '.';
         i += length;
         length = question[i++];
@@ -206,50 +196,39 @@ static int dns_ParseQuestion(dns_packet_t * p_pkt, uint16_t size, char * p_name,
     return 1;
 }
 
+//-------------------------------------------------------------------------------------------------
+
 static int dns_ParseRequest(uint8_t * p_buf, int16_t size, /*uint32_t ip,*/ char * p_name)
 {
     dns_packet_t * p_pkt                   = (dns_packet_t *)p_buf;
-//    uint16_t       id                      = ntohs(p_pkt->header.id);
     uint16_t       qdcount                 = ntohs(p_pkt->header.qdcount);
-//    char           name[DNS_MAX_OCTET_LEN] = {0};
-//    char           addr[16]                = {0};
+    uint16_t       id                      = ntohs(p_pkt->header.id);
     uint16_t       type                    = 0;
     uint16_t       class                   = 0;
-//    int            i                       = 0;
     int            result                  = 0;
-//    uint32_t       rip                     = ntohl(ip);
 
-    /* Parse only single queries */
+    /* Parse only single queries. */
     if ((QR_QUERY == p_pkt->header.qr) && (1 == qdcount))
     {
-//        printf("--- ID: %d - QR: %d - QD Count: %d\n", id, p_pkt->header.qr, qdcount);
-//        printf("  - Data Size: %d\n", (size - sizeof(p_pkt->header)));
+        DNS_LOGV("--- ID: %d - QR: %d - QD Count: %d", id, p_pkt->header.qr, qdcount);
+        DNS_LOGV("  - Data Size: %d", (size - sizeof(p_pkt->header)));
 
         size = (size - sizeof(p_pkt->header));
-//        while(i < )
-//        {
+
         dns_ParseQuestion(p_pkt, size, p_name, &type, &class);
 
         if ((DNS_TYPE_A == type) || (DNS_TYPE_PTR == type))
         {
-            printf(" - Name: %s\n", p_name);
+            DNS_LOGI("  - Name: %s", p_name);
 
             result = 1;
-
-                /* Check the IP address request */
-//                inet_ntoa_r(rip, addr, sizeof(addr) - 1);
-//                printf("  - Reversed IP: %s, %08X", addr, rip);
-//                result = (0 == strncmp(name, addr, strlen(addr)));
-
-                /* Check the Host Name request */
-//                result |= (0 == strcmp(name, p_name));
         }
-//            i++;
-//        }
     }
 
     return result;
 }
+
+//-------------------------------------------------------------------------------------------------
 
 static uint32_t dns_PrepareName(uint8_t * p_buf, const char * p_name)
 {
@@ -283,6 +262,8 @@ static uint32_t dns_PrepareName(uint8_t * p_buf, const char * p_name)
     return pos;
 }
 
+//-------------------------------------------------------------------------------------------------
+
 static int dns_PrepareAnswer(uint8_t * p_buf, uint16_t size, uint32_t ip, const char * p_name)
 {
     dns_packet_t * p_pkt   = (dns_packet_t *)p_buf;
@@ -303,19 +284,7 @@ static int dns_PrepareAnswer(uint8_t * p_buf, uint16_t size, uint32_t ip, const 
     p_pkt->header.rd      = 1;
     p_pkt->header.rcode   = 0;
 
- //   struct ip_info info;
- //   if(wifi_get_ip_info(SOFTAP_IF, &info) == 0)
- //       info.ip.addr = 0;
-
-//    return len + dns_add_answer((uint8_t*)&data[len], NULL, NULL, DNS_TYPE_A, 60,
-//            sizeof(info.ip.addr), (uint8_t *)&info.ip.addr, NULL, NULL);
-//uint32_t ICACHE_FLASH_ATTR dns_add_answer(uint8_t *buf, const uint8_t *name1,
-//        const uint8_t *name2, DNS_TYPE type, uint32_t ttl, uint32_t size1,
-//        const uint8_t *data1, const uint8_t *data2, const uint8_t *data3) {
-
-
-    
-
+    /* Prepare the name or link to the name in the question. */
     if (NULL == p_name)
     {
         p_buf[pos++] = 0xC0;
@@ -326,23 +295,7 @@ static int dns_PrepareAnswer(uint8_t * p_buf, uint16_t size, uint32_t ip, const 
         pos += dns_PrepareName(&p_buf[pos], p_name);
     }
 
-    
-
-//***    uint32_t pos = size;
-
-//    if(name1 == NULL && name2 == NULL) {
-//***        p_data[pos++] = 0xC0;
-//***        p_data[pos++] = sizeof(dns_header_t);
-//    } else {
-//        if(name1)
-//            pos = to_fqdn(&buf[pos], name1);
-//        if(name2) {
-//            if(name1)
-//                pos--;
-//            pos += to_fqdn_local(&buf[pos], name2);
-//        }
-//    }
-
+    /* Prepare the response - IP Address. */
     p_resp        = (dns_answer_t *)&p_buf[pos];
     p_resp->type  = ntohs(DNS_TYPE_A);       // A - type
     p_resp->class = ntohs(1);                // IN - class
@@ -360,41 +313,11 @@ static int dns_PrepareAnswer(uint8_t * p_buf, uint16_t size, uint32_t ip, const 
         }
     }
 
-//    if(data2)
-//        pos += to_fqdn(&buf[pos], data2);
-//    if(data3) {
-//        if(data2)
-//            pos--;
-//        pos += to_fqdn_local(&buf[pos], data3);
-//    }
     p_resp->size = ntohs(pos - datapos);
     return pos;
 }
 
-//int dns_header_parse (struct dns_header *header, void *data)
-//{
-////    memcpy (header, data, 12);
-//
-//  header->id = ntohs(header->id);
-//  header->qdcount = ntohs(header->qdcount);
-//  header->ancount = ntohs(header->ancount);
-//  header->nscount = ntohs(header->nscount);
-//  header->arcount = ntohs(header->arcount);
-//
-//  return 1;
-//}
-
-static const char * gURL[] =
-{
-    "home.local",
-    "home.com",
-    "google.com",
-    "apple.com",
-    "microsoft.com",
-    "msftncsi.com",
-    "msft",
-    "gstatic.com"
-};
+//-------------------------------------------------------------------------------------------------
 
 static int dns_ProcessRequest(uint8_t * p_buf, uint16_t size)
 {
@@ -402,7 +325,7 @@ static int dns_ProcessRequest(uint8_t * p_buf, uint16_t size)
     char           addr[16]                = {0};
     uint32_t       rip                     = ntohl(gIpAddr);
     int            result                  = 0;
-    int            idx                     = NULL;
+    int            idx                     = 0;
 
     if (dns_ParseRequest(gDnsBuffer, size, name))
     {
@@ -410,7 +333,7 @@ static int dns_ProcessRequest(uint8_t * p_buf, uint16_t size)
         {
             /* Check the Host Name request */
             inet_ntoa_r(rip, addr, sizeof(addr) - 1);
-            //printf("  - Reversed IP: %s, %08X", addr, rip);
+            DNS_LOGV("  - Reversed IP: %s, %08X", addr, rip);
             if (NULL != strstr(name, addr))
             {
                 result = dns_PrepareAnswer(gDnsBuffer, size, gIpAddr, gURL[0]);
@@ -465,7 +388,7 @@ static void vDNS_Task(void * pvParameters)
 
     while (FW_TRUE)
     {
-        ESP_LOGI(TAG, "Waiting for WiFi connection...");
+        DNS_LOGI("Waiting for WiFi connection...");
         (void)dns_WaitFor(EVT_WIFI_CONNECTED, portMAX_DELAY);
 
         /* Create the socket */
@@ -474,20 +397,16 @@ static void vDNS_Task(void * pvParameters)
         svrAddr.sin_port = htons(PORT);
         addr_family = AF_INET;
         ip_protocol = IPPROTO_IP;
-        //inet_ntoa_r(svrAddr.sin_addr.s_addr, addr_str, sizeof(addr_str) - 1);
-
-        //ESP_LOGI(TAG, "AP IP : %s", ip4addr_ntoa(&gIpAddr));
-        //ESP_LOGI(TAG, "Creating socket, IP: %s, %08X", addr_str, ((struct sockaddr_in *)&svrAddr)->sin_addr.s_addr);
         inet_ntoa_r(gIpAddr, addr_str, sizeof(addr_str) - 1);
-        ESP_LOGI(TAG, "Creating socket, IP: %s, %08X", addr_str, gIpAddr);
+        DNS_LOGI("Creating socket, IP: %s, %08X", addr_str, gIpAddr);
 
         int sock = socket(addr_family, SOCK_DGRAM, ip_protocol);
         if (sock < 0)
         {
-            ESP_LOGE(TAG, "Unable to create socket: errno %d", errno);
+            DNS_LOGE("Unable to create socket: errno %d", errno);
             break;
         }
-        ESP_LOGI(TAG, "Socket created");
+        DNS_LOGI("Socket created");
 
         /* Set timeouts */
         timeouts.tv_sec = 1;
@@ -495,7 +414,7 @@ static void vDNS_Task(void * pvParameters)
         int err = setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeouts, sizeof(timeouts));
         if (err < 0)
         {
-            ESP_LOGE(TAG, "Unable to set socket timeouts: errno %d", errno);
+            DNS_LOGE("Unable to set socket timeouts: errno %d", errno);
             closesocket(sock);
             break;
         }
@@ -503,10 +422,10 @@ static void vDNS_Task(void * pvParameters)
         err = bind(sock, (struct sockaddr *)&svrAddr, sizeof(svrAddr));
         if (err < 0)
         {
-            ESP_LOGE(TAG, "Socket unable to bind: errno %d", errno);
+            DNS_LOGE("Socket unable to bind: errno %d", errno);
             break;
         }
-        ESP_LOGI(TAG, "Socket binded");
+        DNS_LOGI("Socket binded");
 
         while (FW_TRUE)
         {
@@ -517,29 +436,23 @@ static void vDNS_Task(void * pvParameters)
             {
                 /* Get the sender's ip address as string */
                 inet_ntoa_r(((struct sockaddr_in *)&cltAddr)->sin_addr.s_addr, addr_str, sizeof(addr_str) - 1);
-                ESP_LOGI(TAG, "Received %d bytes from %08X:%s", len, ((struct sockaddr_in *)&cltAddr)->sin_addr.s_addr, addr_str);
+                DNS_LOGV("Received %d bytes from %08X:%s", len, ((struct sockaddr_in *)&cltAddr)->sin_addr.s_addr, addr_str);
 
                 if (0 < (len = dns_ProcessRequest(gDnsBuffer, len)))
                 {
-//                if (dns_ParseRequest(gDnsBuffer, len, gIpAddr, "home.local"))
-//                {
-//                    len = dns_PrepareAnswer(gDnsBuffer, len, gIpAddr, "home.local");
-//                    if (0 < len)
-//                    {
                     int err = sendto(sock, gDnsBuffer, len, 0, (struct sockaddr *)&cltAddr, sizeof(cltAddr));
                     if (err < 0)
                     {
-                        ESP_LOGE(TAG, "Error occured during sending: errno %d", errno);
+                        DNS_LOGE("Error occured during sending: errno %d", errno);
                         break;
                     }
-                    ESP_LOGI(TAG, "Sent %d bytes", len);
-//                    }
+                    DNS_LOGV(TAG, "Sent %d bytes", len);
                 }
             }
 
             if (0 == (EVT_WIFI_CONNECTED & dns_WaitFor(EVT_WIFI_CONNECTED, 0)))
             {
-                ESP_LOGI(TAG, "WiFi connection is lost...");
+                DNS_LOGI("WiFi connection is lost...");
                 closesocket(sock);
                 break;
             }
@@ -547,7 +460,7 @@ static void vDNS_Task(void * pvParameters)
 
         if (sock != -1)
         {
-            ESP_LOGE(TAG, "Shutting down socket and restarting...");
+            DNS_LOGE("Shutting down socket and restarting...");
             closesocket(sock);
         }
     }
