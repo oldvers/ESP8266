@@ -63,5 +63,4 @@ void app_main()
     //EAST_Task_Init();
     user_init();
     WIFI_Task_Init();
-    UDP_DNS_Task_Init();
 }

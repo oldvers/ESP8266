@@ -18,6 +18,7 @@
 ////#include <ssid_config.h>
 #include "httpd.h"
 #include "esp_system.h"
+#include "wifi_task.h"
 
 #define LED_PIN 2
 
@@ -119,6 +120,22 @@ void websocket_task(void * pvParameter)
     vTaskDelete(NULL);
 }
 
+bool websocket_parse_wifi_string(wifi_string_p p_str, uint8_t * p_buf, uint8_t * p_offset)
+{
+    wifi_string_p p_str_buf = NULL;
+
+    if ((WIFI_STRING_MAX_LEN * 3) < (*p_offset)) return false;
+    
+    p_str_buf = (wifi_string_p)&p_buf[*p_offset];
+
+    if (WIFI_STRING_MAX_LEN < p_str_buf->length) return false;
+
+    memcpy(p_str, p_str_buf, (p_str_buf->length + 1));
+    *p_offset += (p_str_buf->length + 1);
+
+    return true;
+}
+
 /**
  * This function is called when websocket frame is received.
  *
@@ -129,15 +146,33 @@ void websocket_cb(struct tcp_pcb * pcb, uint8_t * data, uint16_t data_len, uint8
 {
     printf("[websocket_callback]:\n%.*s\n", (int)data_len, (char *)data);
 
-    uint8_t  response[2] = {0};
-    uint16_t val         = 0;
-    uint32_t rnd         = 0;
+    uint8_t       response[2] = {0};
+    uint16_t      val         = 0;
+    uint32_t      rnd         = 0;
+    uint8_t       offset      = 1;
+    wifi_string_t ssid        = {0};
+    wifi_string_t pswd        = {0};
+    wifi_string_t site        = {0};
+    bool          result      = true;
 
     switch (data[0])
     {
         case 0x01:
-            printf("The config received!\n");
-            val = 0x0100;
+            result &= websocket_parse_wifi_string(&ssid, data, &offset);
+            result &= websocket_parse_wifi_string(&pswd, data, &offset);
+            result &= websocket_parse_wifi_string(&site, data, &offset);
+            if (result)
+            {
+                printf("The config received!\n");
+                printf(" - SSID = %s\n", ssid.data);
+                printf(" - PSWD = %s\n", pswd.data);
+                printf(" - SITE = %s\n", site.data);
+            }
+            result &= WIFI_SaveParams(&ssid, &pswd, &site);
+            if (result)
+            {
+                val = 0x0100;
+            }
             break;
         case 'A': // ADC
             /* This should be done on a separate thread in 'real' applications */
