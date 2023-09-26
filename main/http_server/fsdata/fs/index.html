@@ -111,8 +111,9 @@
 				ws = new WebSocket("ws://" + location.host);
 				ws.binaryType = 'arraybuffer';
 				ws.onopen = function(evt) { retries = 0; updateStatusBox("success", "Connected"); };
-				ws.onerror = function(evt) { updateStatusBox("error", "Error!"); };
+				ws.onerror = function(evt) { updateStatusBox("danger", "Error!"); };
 				ws.onmessage = function(evt) { onMessageFromServer(evt); };
+				ws.onclose = function(evt) { updateStatusBox("warning", "Disconnected"); };
 				//wsOpenStream();
 				retries = 0;
 			}
