@@ -10,6 +10,7 @@
 #include "esp_wifi.h"
 #include "nvs.h"
 #include "nvs_flash.h"
+#include "mdns.h"
 
 #include "lwip/err.h"
 #include "lwip/sys.h"
@@ -117,7 +118,7 @@ static void wifi_ST_OnConnected
     void* event_data
 )
 {
-    ESP_LOGI(TAG, "ST Connected to \"%s\"", WIFI_SSID);
+    ESP_LOGI(TAG, "ST Connected to \"%s\"", gWiFiParams.ssid.data);
     xEventGroupSetBits(gWiFiEvents, EVT_WIFI_ST_CONNECTED);
 }
 
@@ -231,6 +232,30 @@ static void wifi_RegisterHandlers(void)
 
 //-------------------------------------------------------------------------------------------------
 
+static void wifi_mDNS_Init(void)
+{
+    /* Initialize mDNS */
+    ESP_ERROR_CHECK(mdns_init());
+    /* Set mDNS hostname (required if you want to advertise services) */
+    ESP_ERROR_CHECK(mdns_hostname_set(gWiFiParams.site.data));
+    ESP_LOGI(TAG, "mDNS hostname set to: [%s]", gWiFiParams.site.data);
+    /* Set default mDNS instance name */
+    ESP_ERROR_CHECK(mdns_instance_name_set(gWiFiParams.site.data));
+    /* Structure with TXT records */
+    mdns_txt_item_t txt[] =
+    {
+        {"board", "esp8266"}
+    };
+    enum
+    {
+        txtSize = (sizeof(txt)/sizeof(txt[0])),
+    };
+    /* Initialize service */
+    ESP_ERROR_CHECK(mdns_service_add(gWiFiParams.site.data, "_http", "_tcp", 80, txt, txtSize));
+}
+
+//-------------------------------------------------------------------------------------------------
+
 static void wifi_Start(void)
 {
     tcpip_adapter_ip_info_t ip_info      = {0};
@@ -263,9 +288,11 @@ static void wifi_Start(void)
         memcpy(wifi_config.sta.ssid, gWiFiParams.ssid.data, gWiFiParams.ssid.length);
         memcpy(wifi_config.sta.password, gWiFiParams.pswd.data, gWiFiParams.pswd.length);
 
-        gWiFiParams.notify_connected    = UDP_NotifyWiFiIsConnected;
-        gWiFiParams.notify_disconnected = UDP_NotifyWiFiIsDisconnected;
-        gWiFiParams.count               = 3;
+        gWiFiParams.notify_connected    = NULL;
+        gWiFiParams.notify_disconnected = NULL;
+        gWiFiParams.count               = 10;
+
+        wifi_mDNS_Init();
 
         ESP_LOGI(TAG, "ST Starting...");
         ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA) );
@@ -312,7 +339,7 @@ static FW_BOOLEAN wifi_Connect(void)
     if (true == gWiFiParams.valid)
     {
         /* Connect */
-        ESP_LOGI(TAG, "Connecting to \"%s\"...", WIFI_SSID);
+        ESP_LOGI(TAG, "Connecting to \"%s\"...", gWiFiParams.ssid.data);
         ESP_ERROR_CHECK(esp_wifi_connect());
     
         /* Wait for connection */
@@ -368,13 +395,28 @@ static void wifi_WaitForDisconnect(void)
 
 //-------------------------------------------------------------------------------------------------
 
+static bool wifi_LoadParam(nvs_handle h_nvs, char * p_name, wifi_string_t * p_str)
+{
+    char      param[WIFI_STRING_MAX_LEN] = {0};
+    size_t    length                     = sizeof(param);
+    esp_err_t status                     = ESP_OK;
+
+    status = nvs_get_str(h_nvs, p_name, param, &length);
+    if (ESP_OK != status) return false;
+    if (WIFI_STRING_MAX_LEN < length) return false;
+    memcpy(p_str->data, param, length);
+    p_str->length = length;
+
+    return true;
+}
+
+//-------------------------------------------------------------------------------------------------
+
 static bool wifi_LoadParams(wifi_params_t * p_params)
 {
-    nvs_handle    h_nvs  = 0;
-    esp_err_t     status = ESP_OK;
-    wifi_params_t params = {0};
-    size_t        length = 0;
-    bool          result = false;
+    nvs_handle    h_nvs                      = 0;
+    esp_err_t     status                     = ESP_OK;
+    bool          result                     = true;
 
     status = nvs_flash_init();
     ESP_ERROR_CHECK(status);
@@ -384,39 +426,23 @@ static bool wifi_LoadParams(wifi_params_t * p_params)
     {
         do
         {
-            memset(&params, 0, sizeof(params));
-
-            length = sizeof(params.ssid);
-            status = nvs_get_str(h_nvs, "ssid", params.ssid.data, &length);
-            if (ESP_OK != status) break;
-            params.ssid.length = length;
-
-            length = sizeof(params.pswd);
-            status = nvs_get_str(h_nvs, "pswd", params.pswd.data, &length);
-            if (ESP_OK != status) break;
-            params.pswd.length = length;
-
-            length = sizeof(params.site);
-            status = nvs_get_str(h_nvs, "site", params.site.data, &length);
-            if (ESP_OK != status) break;
-            params.site.length = length;
-
-            result = true;
+            result &= wifi_LoadParam(h_nvs, "ssid", &p_params->ssid);
+            result &= wifi_LoadParam(h_nvs, "pswd", &p_params->pswd);
+            result &= wifi_LoadParam(h_nvs, "site", &p_params->site);
         }
         while (0);
     }
 
     if (true == result)
     {
-        memcpy(p_params, &params, sizeof(*p_params));
         p_params->valid = true;
 
         ESP_LOGI
         (
             TAG, "Restored params:\n  - SSID:%d:%s\n  - PSWD:%d:%s\n  - SITE:%d:%s",
-            params.ssid.length, params.ssid.data,
-            params.pswd.length, params.pswd.data,
-            params.site.length, params.site.data
+            p_params->ssid.length, p_params->ssid.data,
+            p_params->pswd.length, p_params->pswd.data,
+            p_params->site.length, p_params->site.data
         );
     }
     else
@@ -602,14 +628,13 @@ void WIFI_Task_Init(void)
 //        gWiFiConnParams.pswd_len = strlen(WIFI_PSWD);
 //        memcpy(gWiFiConnParams.site, WIFI_SITE, sizeof(WIFI_SITE));
 //        gWiFiConnParams.pswd_len = strlen(WIFI_PSWD);
-//
+
 //        wifi_ClearParams();
         UDP_DNS_Task_Init();
     }
     else
     {
-//        wifi_ClearParams();
-        UDP_Task_Init();
+        //wifi_ClearParams();
     }
 
     /* Create the events group for WiFi task */

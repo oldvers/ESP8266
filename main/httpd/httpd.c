@@ -216,8 +216,8 @@
 #    define LWIP_HTTPD_KILL_OLD_ON_CONNECTIONS_EXCEEDED 0
 #endif
 
-#define HTTPD_LOG  2
-#define WS_LOG     2
+#define HTTPD_LOG  0
+#define WS_LOG     0
 
 #if (1 == HTTPD_LOG)
 #    define HTTPD_LOGI(...)  ESP_LOGI(g_tagHTTPD, __VA_ARGS__)
