@@ -333,9 +333,15 @@ typedef struct
 {
     const char * name;
     u8_t         shtml;
-} default_filename;
+} default_filename_t;
 
-const default_filename g_psDefaultFilenames[] =
+typedef struct
+{
+    const default_filename_t * names;
+    u8_t                       count;
+} default_filenames_t;
+
+static const default_filename_t g_psIndexFilenames[] =
 {
     {"/index.shtml", 1},
     {"/index.ssi", 1},
@@ -344,7 +350,16 @@ const default_filename g_psDefaultFilenames[] =
     {"/index.htm", 0}
 };
 
-#define NUM_DEFAULT_FILENAMES (sizeof(g_psDefaultFilenames) / sizeof(default_filename))
+static const default_filename_t g_psConfigFilenames[] =
+{
+    {"/config.html", 0}
+};
+
+static default_filenames_t g_psDefaultFilenames =
+{
+    .names = g_psIndexFilenames,
+    .count = (sizeof(g_psIndexFilenames)/sizeof(g_psIndexFilenames[0]))
+};
 
 #if LWIP_HTTPD_SUPPORT_REQUESTLIST
 /** HTTP request is copied here from pbufs for simple parsing */
@@ -2502,17 +2517,17 @@ static err_t http_find_file(struct http_state * hs, const char * uri, int is_09)
     {
         /* Try each of the configured default filenames until we find one
            that exists. */
-        for (loop = 0; loop < NUM_DEFAULT_FILENAMES; loop++)
+        for (loop = 0; loop < g_psDefaultFilenames.count; loop++)
         {
-            HTTPD_LOGI("Looking for %s...", g_psDefaultFilenames[loop].name);
-            err = fs_open(&hs->file_handle, (char *)g_psDefaultFilenames[loop].name);
-            uri = (char *)g_psDefaultFilenames[loop].name;
+            HTTPD_LOGI("Looking for %s...", g_psDefaultFilenames.names[loop].name);
+            err = fs_open(&hs->file_handle, (char *)g_psDefaultFilenames.names[loop].name);
+            uri = (char *)g_psDefaultFilenames.names[loop].name;
             if (err == ERR_OK)
             {
                 file = &hs->file_handle;
                 HTTPD_LOGI("Opened");
 #if LWIP_HTTPD_SSI
-                tag_check = g_psDefaultFilenames[loop].shtml;
+                tag_check = g_psDefaultFilenames.names[loop].shtml;
 #endif /* LWIP_HTTPD_SSI */
                 break;
             }
@@ -3092,7 +3107,7 @@ static void httpd_init_addr(const ip_addr_t * local_addr)
 /**
  * Initialize the httpd: set up a listening PCB and bind it to the defined port
  */
-void httpd_init(void)
+void httpd_init(bool config)
 {
 #if HTTPD_USE_MEM_POOL
     LWIP_ASSERT("memp_sizes[MEMP_HTTPD_STATE] >= sizeof(http_state)",
@@ -3101,6 +3116,12 @@ void httpd_init(void)
                 memp_sizes[MEMP_HTTPD_SSI_STATE] >= sizeof(http_ssi_state));
 #endif
     HTTPD_LOGI("Init");
+
+    if (true == config)
+    {
+        g_psDefaultFilenames.names = g_psConfigFilenames;
+        g_psDefaultFilenames.count = (sizeof(g_psConfigFilenames)/sizeof(g_psConfigFilenames[0]));
+    }
 
     httpd_init_addr(IP_ADDR_ANY);
 }

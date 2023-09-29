@@ -19,6 +19,7 @@
 #include "httpd.h"
 #include "esp_system.h"
 #include "wifi_task.h"
+#include "led_strip.h"
 
 #define LED_PIN 2
 
@@ -28,6 +29,9 @@ enum
     SSI_FREE_HEAP,
     SSI_LED_STATE
 };
+
+static uint8_t gLedStrip[16*3] = {0};
+static bool    gConfig         = false;
 
 int32_t ssi_handler(int32_t iIndex, char * pcInsert, int32_t iInsertLen)
 {
@@ -144,7 +148,8 @@ bool websocket_parse_wifi_string(wifi_string_p p_str, uint8_t * p_buf, uint8_t *
  */
 void websocket_cb(struct tcp_pcb * pcb, uint8_t * data, uint16_t data_len, uint8_t mode)
 {
-    printf("[websocket_callback]:\n%.*s\n", (int)data_len, (char *)data);
+    printf("[websocket_callback]:\n");
+    //%.*s\n", (int)data_len, (char *)data);
 
     uint8_t       response[2] = {0};
     uint16_t      val         = 0;
@@ -173,6 +178,18 @@ void websocket_cb(struct tcp_pcb * pcb, uint8_t * data, uint16_t data_len, uint8
             {
                 val = 0x0100;
             }
+            break;
+        case 0x02:
+            printf("Received Color command %d bytes\n", data_len);
+
+            for (uint8_t idx = 0; idx < sizeof(gLedStrip); idx += 3)
+            {
+                gLedStrip[idx + 0] = data[2];
+                gLedStrip[idx + 1] = data[1];
+                gLedStrip[idx + 2] = data[3];
+            }
+            LED_Strip_Update();
+            val = 0x0200;
             break;
         case 'A': // ADC
             /* This should be done on a separate thread in 'real' applications */
@@ -213,6 +230,8 @@ void websocket_open_cb(struct tcp_pcb * pcb, const char * uri)
     }
 }
 
+//-------------------------------------------------------------------------------------------------
+
 void httpd_task(void * pvParameters)
 {
     tCGI pCGIs[] =
@@ -242,7 +261,7 @@ void httpd_task(void * pvParameters)
         (tWsOpenHandler) websocket_open_cb,
         (tWsHandler) websocket_cb
     );
-    httpd_init();
+    httpd_init(gConfig);
 
     for (;;)
     {
@@ -250,10 +269,15 @@ void httpd_task(void * pvParameters)
     }
 }
 
-void user_init(void)
+//-------------------------------------------------------------------------------------------------
+
+void HTTP_Server_Init(bool config)
 {
 //    uart_set_baud(0, 115200);
     printf("SDK version: %s\n", esp_get_idf_version());
+
+    LED_Strip_Init(gLedStrip, sizeof(gLedStrip));
+    gConfig = config;
 
 //    struct sdk_station_config config = {
 //        .ssid = "HomeWLAN",
@@ -272,3 +296,5 @@ void user_init(void)
     /* initialize tasks */
     xTaskCreate(&httpd_task, "HTTP Daemon", 2048, NULL, 2, NULL);
 }
+
+//-------------------------------------------------------------------------------------------------

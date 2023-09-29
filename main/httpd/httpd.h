@@ -258,6 +258,6 @@ err_t websocket_write(struct tcp_pcb *pcb, const uint8_t *data, uint16_t len, ui
  */
 void websocket_register_callbacks(tWsOpenHandler ws_open_cb, tWsHandler ws_cb);
 
-void httpd_init(void);
+void httpd_init(bool config);
 
 #endif /* __HTTPD_H__ */

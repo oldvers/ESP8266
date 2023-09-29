@@ -19,6 +19,7 @@
 #include "wifi_task.h"
 #include "udp_task.h"
 #include "udp_dns_server.h"
+#include "http_server.h"
 
 //-------------------------------------------------------------------------------------------------
 
@@ -636,6 +637,7 @@ void WIFI_Task_Init(void)
     {
         //wifi_ClearParams();
     }
+    HTTP_Server_Init((false == gWiFiParams.valid));
 
     /* Create the events group for WiFi task */
     gWiFiEvents = xEventGroupCreate();

@@ -15,10 +15,19 @@
         <div class="has-w-auto has-pl-0 has-pr-0 has-ml-auto has-mr-auto">
             <div class="card is-shadowed">
 				<div id="status_box" class="alert is-secondary">Starting...</div>
-                <div align="center">
-                    <label class="label is-block has-size-3">Web Aqua Light</label>
+                <h4>Connection parameters</h4>
+                <div class="has-mb-4">
+                    <label class="label">WiFi SSID (Router Name)</label>
+                    <input id="ssid" class="input" type="text" minlength="5" maxlength="32" placeholder="HomeWLAN" />
                 </div>
-				<div id="picker" align="center" class="has-pt-6 has-pb-6"></div>
+                <div class="has-mb-4">
+                    <label class="label">WiFi Password</label>
+                    <input id="pwd" class="input" type="text" minlength="8" maxlength="32" placeholder="Password" />
+                </div>
+                <div class="has-mb-6">
+                    <label class="label">Site Name</label>
+                    <input id="site" class="input" type="text" minlength="5" maxlength="32" placeholder="WebAquaLight" />
+                </div>
                 <button class="button is-full" onclick="onSaveBtnClick()">
                     <i class="si-lock has-pr-1"></i>
                     <span>Save</span>
@@ -27,12 +36,11 @@
         </div>
     </div>
 
-	<script src="js/iro.js" type="text/javascript"></script>
 	<script>
 		var ws;
 		var retries;
 		//var series = new TimeSeries();
-        var colorPicker = new iro.ColorPicker('#picker');
+        //var colorPicker = new iro.ColorPicker('#picker');
 
 		
 		window.onload = onWindowLoad;
@@ -41,7 +49,6 @@
 		{
 			console.log("Window loaded");
 		    wsOpen();
-			colorPicker.on('input:end', onColorChange);
 			//startPolling();
 			//setStatusBox("info", "Opening WebSocket..");
 		}
@@ -56,7 +63,7 @@
 
 		function onMessageFromServer(evt)
 		{
-			retries = 0;
+			//retries = 0;
 			let view    = new DataView(evt.data);
 			let command = view.getUint8(0);
 			let status  = view.getUint8(1);
@@ -66,7 +73,7 @@
 			if ((0x01 == command) && (0x00 == status))
 			{
 				console.log("Configuration saved!");
-				window.location.href = "complete.html";
+				window.location.href = "complete";
 			}
 			//if (val == 0xBEEF || val == 0xDEAD)
 			//	console.log("LED switched");
@@ -126,7 +133,7 @@
 
 		function onSaveBtnClick()
 		{
-			/* let ssid = document.getElementById('ssid').value;
+			let ssid = document.getElementById('ssid').value;
 			let pwd = document.getElementById('pwd').value;
 			let site = document.getElementById('site').value;
 
@@ -152,7 +159,7 @@
 				putStrInBuffer(view, offset, site);
 				
 				wsSendToServer(buffer);
-			} */
+			}
 		}
 
 		function wsSendToServer(data)
@@ -166,21 +173,6 @@
 				ws.send(data);
 			}
 		}
-
-        function onColorChange(color)
-		{
-            console.log("Color = " + color.red + " " + color.green + " " + color.blue);
-
-            let buffer = new ArrayBuffer(4);
-            let view = new Uint8Array(buffer);
-
-			view[0] = 0x02;
-			view[1] = color.red;
-			view[2] = color.green;
-			view[3] = color.blue;
-				
-			wsSendToServer(buffer);
-        }
 
 			function startPolling() {
 				var chart = new SmoothieChart({millisPerPixel:11,grid:{fillStyle:'#ffffff',strokeStyle:'#ffffff',borderVisible:false},

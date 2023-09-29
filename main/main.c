@@ -33,7 +33,7 @@ static void print_info(void)
     error = esp_efuse_mac_get_default(mac);
     ESP_ERROR_CHECK(error);
 
-    printf("--- ESP8266 chip with %d CPU cores and WiFi ---\n", chip_info.cores);
+    printf("\n\n\n--- ESP8266 chip with %d CPU cores and WiFi ---\n", chip_info.cores);
     printf("  - Silicon revision %d\n", chip_info.revision);
     if (chip_info.features & CHIP_FEATURE_EMB_FLASH)
     {
@@ -52,8 +52,6 @@ static void print_info(void)
     fflush(stdout);
 }
 
-extern void user_init(void);
-
 void app_main()
 {
     /* Print chip information */
@@ -61,6 +59,5 @@ void app_main()
 
     /* Initialize the tasks */
     //EAST_Task_Init();
-    user_init();
     WIFI_Task_Init();
 }
