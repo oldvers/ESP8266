@@ -1,153 +1,304 @@
 #include <stdint.h>
 #include <string.h>
+
+#include "freertos/FreeRTOS.h"
+#include "freertos/event_groups.h"
+
 #include "esp_attr.h"
 #include "gpio.h"
 #include "esp_clk.h"
 
-static uint8_t * gPixels      = NULL;
-static uint8_t   gPixelsCount = 0;
+#include "esp8266/uart_struct.h"
+#include "esp8266/uart_register.h"
+#include "esp8266/pin_mux_register.h"
+#include "esp8266/eagle_soc.h"
+#include "esp8266/rom_functions.h"
+#include "rom/ets_sys.h"
+#include "driver/uart.h"
+#include "driver/uart_select.h"
 
-inline uint32_t _getCycleCount()
+
+#define LEDS_ENTER_CRITICAL()      portENTER_CRITICAL()
+#define LEDS_EXIT_CRITICAL()       portEXIT_CRITICAL()
+/* 800kHz, 4 serial bytes per NeoByte */
+#define LEDS_UART_BAUDRATE              (3200000)
+#define LEDS_UART_EMPTY_THRESH_DEFAULT  (80)
+#define LEDS_EVT_COMPLETE               (BIT0)
+
+/* DRAM_ATTR is required to avoid UART array placed in flash,
+   due to accessed from ISR */
+static DRAM_ATTR uart_dev_t * const gUART        = &uart0;
+static uint8_t *                    gLeds        = NULL;
+static uint8_t                      gLedsCount   = 0;
+static EventGroupHandle_t           gLedsEvents  = NULL;
+
+static uint8_t *                    gStart       = NULL;
+static uint8_t *                    gEnd         = NULL;
+
+//-------------------------------------------------------------------------------------------------
+
+static EventBits_t leds_WaitFor(EventBits_t events, TickType_t timeout)
 {
-    uint32_t ccount;
-    __asm__ __volatile__("rsr %0, ccount":"=a" (ccount));
-    return ccount;
+    EventBits_t bits = 0;
+
+    /* Waiting until either specified event is set */
+    bits = xEventGroupWaitBits
+           (
+               gLedsEvents,
+               events,       /* Bits To Wait For */
+               pdTRUE,       /* Clear On Exit */
+               pdFALSE,      /* Wait For All Bits */
+               timeout / portTICK_RATE_MS
+           );
+
+    return bits;
 }
 
-#define CYCLES_800_T0H  (esp_clk_cpu_freq() / 2500000) // 0.4us
-#define CYCLES_800_T1H  (esp_clk_cpu_freq() / 1250000) // 0.8us
-#define CYCLES_800      (esp_clk_cpu_freq() /  800000) // 1.25us per bit
-//#define CYCLES_400_T0H  (F_CPU / 2000000)
-//#define CYCLES_400_T1H  (F_CPU /  833333)
-//#define CYCLES_400      (F_CPU /  400000) 
+//-------------------------------------------------------------------------------------------------
 
-static void IRAM_ATTR bitbang_send_pixels_800(uint8_t * pixels, uint8_t count, uint8_t pin)
+const uint8_t * IRAM_ATTR ledstrip_FillUartFifo(const uint8_t * leds, const uint8_t * end)
 {
-    const uint32_t pinRegister = BIT(pin);
-    uint8_t        mask        = 0;
-    uint8_t        subpix      = 0;
-    uint32_t       cyclesStart = 0;
-    uint8_t *      end         = (pixels + count);
-
-    uint32_t       cycles_lo   = CYCLES_800;
-    uint32_t       cycles_1_hi = CYCLES_800_T1H;
-    uint32_t       cycles_0_hi = CYCLES_800_T0H;
-
-    /* Trigger emediately */
-    cyclesStart = _getCycleCount() - cycles_lo; //CYCLES_800;
-    do
+    // Remember: UARTs send less significant bit (LSB) first so
+    //      pushing ABCDEF byte will generate a 0FEDCBA1 signal,
+    //      including a LOW(0) start & a HIGH(1) stop bits.
+    // Also, we have configured UART to invert logic levels, so:
+    const uint8_t _uartData[4] =
     {
-        subpix = *pixels++;
-        for (mask = 0x80; mask != 0; mask >>= 1)
-        {
-            /* Do the checks here while we are waiting on time to pass */
-            uint32_t cyclesBit = ((subpix & mask)) ? cycles_1_hi : cycles_0_hi; //CYCLES_800_T1H : CYCLES_800_T0H;
-            uint32_t cyclesNext = cyclesStart;
-
-            /* After we have done as much work as needed for this next bit */
-            /* now wait for the HIGH */
-            do
-            {
-                /* Cache and use this count so we don't incur another */
-                /* instruction before we turn the bit high */
-                cyclesStart = _getCycleCount();
-            }
-            while ((cyclesStart - cyclesNext) < cycles_lo); //CYCLES_800);
-
-            /* Set high */
-            GPIO_REG_WRITE(GPIO_OUT_W1TS_ADDRESS, pinRegister);
-
-            /* Wait for the LOW */
-            do
-            {
-                cyclesNext = _getCycleCount();
-            }
-            while ((cyclesNext - cyclesStart) < cyclesBit);
-
-            /* Set low */
-            GPIO_REG_WRITE(GPIO_OUT_W1TC_ADDRESS, pinRegister);
-        }
+        0b110111, // On wire: 1 000 100 0 [Neopixel reads 00]
+        0b000111, // On wire: 1 000 111 0 [Neopixel reads 01]
+        0b110100, // On wire: 1 110 100 0 [Neopixel reads 10]
+        0b000100, // On wire: 1 110 111 0 [NeoPixel reads 11]
+    };
+    uint8_t avail = (UART_FIFO_LEN - gUART->status.txfifo_cnt) / 4;
+    if (end - leds > avail)
+    {
+        end = leds + avail;
     }
-    while (pixels < end);
+    while (leds < end)
+    {
+        uint8_t subpix = *leds++;
+        gUART->fifo.rw_byte = _uartData[(subpix >> 6) & 0x3];
+        gUART->fifo.rw_byte = _uartData[(subpix >> 4) & 0x3];
+        gUART->fifo.rw_byte = _uartData[(subpix >> 2) & 0x3];
+        gUART->fifo.rw_byte = _uartData[ subpix       & 0x3];
+    }
+    return leds;
 }
 
-void LED_Strip_Init(uint8_t * pixels, uint8_t count)
-{
-    gpio_config_t io_conf   = {0};
+//-------------------------------------------------------------------------------------------------
 
-    gPixels      = pixels;
-    gPixelsCount = count;
+static void ledstrip_UartIrqHandler(void * param)
+{
+    uint32_t uart_intr_status = gUART->int_st.val;
+    BaseType_t xHigherPriorityTaskWoken, xResult;
+
+    while (0 != uart_intr_status)
+    {
+        if ( 0 != (uart_intr_status & UART_TXFIFO_EMPTY_INT_ST_M) )
+        {
+            /* Clear the interrupt flag */
+            gUART->int_clr.txfifo_empty = 1;
+
+            /* Fill the FIFO with new data */
+            gStart = ledstrip_FillUartFifo(gStart, gEnd);
+
+            /* Disable TX interrupt when done */
+            if (gStart == gEnd)
+            {
+                gUART->int_ena.txfifo_empty = 0;
+                /* Set event */
+                /* xHigherPriorityTaskWoken must be initialised to pdFALSE */
+                xHigherPriorityTaskWoken = pdFALSE;
+                /* Set bits in EventGroup */
+                xResult = xEventGroupSetBitsFromISR
+                          (
+                              gLedsEvents,
+                              LEDS_EVT_COMPLETE,
+                              &xHigherPriorityTaskWoken
+                          );
+                /* Was the event set successfully? */
+                if ((pdPASS == xResult) && (pdTRUE == xHigherPriorityTaskWoken))
+                {
+                    /* If xHigherPriorityTaskWoken is now set to pdTRUE then a context
+                     * switch should be requested. The macro used is port specific and
+                     * will be either portYIELD_FROM_ISR() or portEND_SWITCHING_ISR() -
+                     * refer to the documentation page for the port being used. */
+                    portYIELD_FROM_ISR(); //xHigherPriorityTaskWoken);
+                }
+            }
+        }
+        else
+        {
+            /* Simply clear all the other IRQ flags */
+            gUART->int_clr.val = UART_INTR_MASK; //uart_intr_status;
+        }
+
+        /* Get the IRQ flags */
+        uart_intr_status = gUART->int_st.val;
+    }
+}
+
+//-------------------------------------------------------------------------------------------------
+
+static void ledstrip_InitializeUart(void)
+{
+    /* Create the events group for UDP task */
+    gLedsEvents = xEventGroupCreate();
+
+    /* Init the GPIO pins of UART */
+    PIN_PULLUP_DIS(PERIPHS_IO_MUX_U0TXD_U);
+    PIN_FUNC_SELECT(PERIPHS_IO_MUX_U0RXD_U, FUNC_U0RXD);
+    PIN_FUNC_SELECT(PERIPHS_IO_MUX_U0TXD_U, FUNC_U0TXD);
+
+    /* Disable all interrupts */
+    LEDS_ENTER_CRITICAL();
+
+    /* Disable the hardware flow control */
+    gUART->conf1.rx_flow_en = 0;
+    gUART->conf0.tx_flow_en = 0;
+
+    /* Set the baud rate */
+    gUART->clk_div.val = (uint32_t)(UART_CLK_FREQ / LEDS_UART_BAUDRATE) & 0xFFFFF;
+
+    /* Set the word length */        
+    gUART->conf0.bit_num = UART_DATA_6_BITS;
+
+    /* Set the stop bits */
+    gUART->conf0.stop_bit_num = UART_STOP_BITS_1;
+
+    /* Set the parity */
+    gUART->conf0.parity = (UART_PARITY_DISABLE & 0x1);
+    gUART->conf0.parity_en = ((UART_PARITY_DISABLE >> 1) & 0x1);
+
+    /* Reset the Rx FIFO */
+    gUART->conf0.rxfifo_rst = 0x1;
+    gUART->conf0.rxfifo_rst = 0x0;
+    gUART->conf0.txfifo_rst = 0x1;
+    gUART->conf0.txfifo_rst = 0x0;
+
+    /* Set the Rx/Tx/Timeout treshholds */
+    gUART->conf1.txfifo_empty_thrhd = LEDS_UART_EMPTY_THRESH_DEFAULT;
+
+    /* Invert the TX voltage associated with logic level so:
+     *    - A logic level 0 will generate a Vcc signal
+     *    - A logic level 1 will generate a Gnd signal */
+    gUART->conf0.txd_inv = 1;
+
+    LEDS_EXIT_CRITICAL();
+
+    /* Register the IRQ handler */
+    (void)uart_isr_register(UART_NUM_0, ledstrip_UartIrqHandler, NULL);
+
+    LEDS_ENTER_CRITICAL();
+
+    /* Clear the interrupts' flags */
+    gUART->int_clr.val = UART_INTR_MASK;
+
+    LEDS_EXIT_CRITICAL();
+}
+
+//-------------------------------------------------------------------------------------------------
+
+static void ledstrip_UpdateUart(void)
+{
+    gStart = gLeds;
+    gEnd   = gLeds + gLedsCount;
+
+    vTaskDelay(10 / portTICK_RATE_MS);
+
+    LEDS_ENTER_CRITICAL();
+
+    /* Clear the interrupt flag */
+    gUART->int_clr.txfifo_empty = 1;
+    /* Enable the interrupt */
+    gUART->int_ena.txfifo_empty = 1;
+
+    LEDS_EXIT_CRITICAL();
+
+    (void)leds_WaitFor(LEDS_EVT_COMPLETE, portMAX_DELAY);
+}
+
+//-------------------------------------------------------------------------------------------------
+
+void LED_Strip_Init(uint8_t * leds, uint8_t count)
+{
+    gLeds      = leds;
+    gLedsCount = count;
 
     /* Clear all the pixels */
-    memset(gPixels, 0, gPixelsCount);
+    memset(gLeds, 0, gLedsCount);
 
-    /* Disable interrupt */
-    io_conf.intr_type = GPIO_INTR_DISABLE;
-    /* Set as output mode */
-    io_conf.mode = GPIO_MODE_OUTPUT;
-    /* Bit mask of the pins that you want to set */
-    io_conf.pin_bit_mask = BIT(GPIO_NUM_1);
-    /* Disable pull-down mode */
-    io_conf.pull_down_en = 0;
-    /* Disable pull-up mode */
-    io_conf.pull_up_en = 0;
-    /* Configure GPIO with the given settings */
-    gpio_config(&io_conf);
-    
-    bitbang_send_pixels_800(gPixels, gPixelsCount, GPIO_NUM_1);
+    ledstrip_InitializeUart();
+
+    ledstrip_UpdateUart();
 }
+
+//-------------------------------------------------------------------------------------------------
 
 void LED_Strip_Update(void)
 {
-    bitbang_send_pixels_800(gPixels, gPixelsCount, GPIO_NUM_1);
+    ledstrip_UpdateUart();
 }
 
-/*
-void ICACHE_RAM_ATTR bitbang_send_pixels_400(uint8_t* pixels, uint8_t* end, uint8_t pin)
+//-------------------------------------------------------------------------------------------------
+
+void LED_Strip_SetColor(uint16_t pixel, uint8_t r, uint8_t g, uint8_t b)
 {
-    const uint32_t pinRegister = _BV(pin);
-    uint8_t mask;
-    uint8_t subpix;
-    uint32_t cyclesStart;
+    uint32_t pos = pixel * 3;
 
-    // trigger emediately
-    cyclesStart = _getCycleCount() - CYCLES_400;
-    do
-    {
-        subpix = *pixels++;
-        for (mask = 0x80; mask; mask >>= 1)
-        {
-            uint32_t cyclesBit = ((subpix & mask)) ? CYCLES_400_T1H : CYCLES_400_T0H;
-            uint32_t cyclesNext = cyclesStart;
+    if (gLedsCount <= (pos + 2)) return;
 
-            // after we have done as much work as needed for this next bit
-            // now wait for the HIGH
-            do
-            {
-                // cache and use this count so we don't incur another 
-                // instruction before we turn the bit high
-                cyclesStart = _getCycleCount();
-            } while ((cyclesStart - cyclesNext) < CYCLES_400);
-
-#if defined(ARDUINO_ARCH_ESP32)
-            GPIO.out_w1ts = pinRegister;
-#else
-            GPIO_REG_WRITE(GPIO_OUT_W1TS_ADDRESS, pinRegister);
-#endif
-
-            // wait for the LOW
-            do
-            {
-                cyclesNext = _getCycleCount();
-            } while ((cyclesNext - cyclesStart) < cyclesBit);
-
-            // set low
-#if defined(ARDUINO_ARCH_ESP32)
-            GPIO.out_w1tc = pinRegister;
-#else
-            GPIO_REG_WRITE(GPIO_OUT_W1TC_ADDRESS, pinRegister);
-#endif
-        }
-    } while (pixels < end);
+    gLeds[pos++] = r;
+    gLeds[pos++] = g;
+    gLeds[pos++] = b;
 }
-*/
+
+//-------------------------------------------------------------------------------------------------
+
+static uint32_t ledstrip_HSV_to_RGB(uint32_t hue, uint32_t sat, uint32_t value, uint8_t * rgb)
+{
+    double r = 0, g = 0, b = 0;
+
+    double h = (double)hue/360.0;
+    double s = (double)sat/255.0;
+    double v = (double)value/255.0;
+
+    int i = (int)(h * 6);
+    double f = h * 6 - i;
+    double p = v * (1 - s);
+    double q = v * (1 - f * s);
+    double t = v * (1 - (1 - f) * s);
+
+    switch(i % 6)
+    {
+        case 0: r = v, g = t, b = p; break;
+        case 1: r = q, g = v, b = p; break;
+        case 2: r = p, g = v, b = t; break;
+        case 3: r = p, g = q, b = v; break;
+        case 4: r = t, g = p, b = v; break;
+        case 5: r = v, g = p, b = q; break;
+    }
+
+    rgb[0] = (uint8_t)(r * 255);
+    rgb[1] = (uint8_t)(g * 255);
+    rgb[2] = (uint8_t)(b * 255);
+    return ((rgb[0] & 0xFF) << 16) | ((rgb[1] & 0xFF) << 8) | (rgb[2] & 0xFF);
+}
+
+//-------------------------------------------------------------------------------------------------
+
+void LED_Strip_Rainbow(uint32_t sat, uint32_t val)
+{
+    uint32_t i;
+    uint32_t hue;
+    uint8_t  rgb[3];
+
+    for (i = 0; i < (gLedsCount / 3); i++)
+    {
+        hue = ((360 * i) / gLedsCount);
+        ledstrip_HSV_to_RGB(hue, sat, val, rgb);
+        LED_Strip_SetColor(i, rgb[0], rgb[1], rgb[2]);
+    }
+}
+
+//-------------------------------------------------------------------------------------------------

@@ -19,7 +19,7 @@
 #include "httpd.h"
 #include "esp_system.h"
 #include "wifi_task.h"
-#include "led_strip.h"
+#include "led_task.h"
 
 #define LED_PIN 2
 
@@ -30,7 +30,6 @@ enum
     SSI_LED_STATE
 };
 
-static uint8_t gLedStrip[16*3] = {0};
 static bool    gConfig         = false;
 
 int32_t ssi_handler(int32_t iIndex, char * pcInsert, int32_t iInsertLen)
@@ -182,13 +181,9 @@ void websocket_cb(struct tcp_pcb * pcb, uint8_t * data, uint16_t data_len, uint8
         case 0x02:
             printf("Received Color command %d bytes\n", data_len);
 
-            for (uint8_t idx = 0; idx < sizeof(gLedStrip); idx += 3)
-            {
-                gLedStrip[idx + 0] = data[2];
-                gLedStrip[idx + 1] = data[1];
-                gLedStrip[idx + 2] = data[3];
-            }
-            LED_Strip_Update();
+            led_message_t msg = {LED_CMD_COLOR, data[2], data[1], data[3]};
+            LED_Task_SendMsg(&msg);
+
             val = 0x0200;
             break;
         case 'A': // ADC
@@ -273,11 +268,14 @@ void httpd_task(void * pvParameters)
 
 void HTTP_Server_Init(bool config)
 {
-//    uart_set_baud(0, 115200);
     printf("SDK version: %s\n", esp_get_idf_version());
 
-    LED_Strip_Init(gLedStrip, sizeof(gLedStrip));
     gConfig = config;
+    if (gConfig)
+    {
+        led_message_t msg = {LED_CMD_CONFIG, 0, 0, 0};
+        LED_Task_SendMsg(&msg);
+    }
 
 //    struct sdk_station_config config = {
 //        .ssid = "HomeWLAN",

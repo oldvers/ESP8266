@@ -19,6 +19,7 @@ set( srcs
      "wifi/wifi_task.c"
      "udp/udp_task.c"
      "led_strip/led_strip.c"
+     "led_strip/led_task.c"
      "httpd/fs.c"
      "httpd/httpd.c"
      "httpd/strcasestr.c"

@@ -405,6 +405,7 @@ static bool wifi_LoadParam(nvs_handle h_nvs, char * p_name, wifi_string_t * p_st
     status = nvs_get_str(h_nvs, p_name, param, &length);
     if (ESP_OK != status) return false;
     if (WIFI_STRING_MAX_LEN < length) return false;
+    if (0 == length) return false;
     memcpy(p_str->data, param, length);
     p_str->length = length;
 
@@ -417,7 +418,7 @@ static bool wifi_LoadParams(wifi_params_t * p_params)
 {
     nvs_handle    h_nvs                      = 0;
     esp_err_t     status                     = ESP_OK;
-    bool          result                     = true;
+    bool          result                     = false;
 
     status = nvs_flash_init();
     ESP_ERROR_CHECK(status);
@@ -425,6 +426,7 @@ static bool wifi_LoadParams(wifi_params_t * p_params)
     status = nvs_open("wifi", NVS_READONLY, &h_nvs);
     if (ESP_OK == status)
     {
+        result = true;
         do
         {
             result &= wifi_LoadParam(h_nvs, "ssid", &p_params->ssid);
@@ -623,14 +625,7 @@ void WIFI_Task_Init(void)
     ESP_LOGI(TAG, "Boot = 0x%08X", gWiFiBoot);
     if ((WIFI_BOOT_ABSENT == gWiFiBoot) || (false == wifi_LoadParams(&gWiFiParams)))
     {
-//        memcpy(gWiFiConnParams.ssid, WIFI_SSID, sizeof(WIFI_SSID));
-//        gWiFiConnParams.ssid_len = strlen(WIFI_SSID);
-//        memcpy(gWiFiConnParams.pswd, WIFI_PSWD, sizeof(WIFI_PSWD));
-//        gWiFiConnParams.pswd_len = strlen(WIFI_PSWD);
-//        memcpy(gWiFiConnParams.site, WIFI_SITE, sizeof(WIFI_SITE));
-//        gWiFiConnParams.pswd_len = strlen(WIFI_PSWD);
-
-//        wifi_ClearParams();
+        //wifi_ClearParams();
         UDP_DNS_Task_Init();
     }
     else

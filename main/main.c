@@ -17,6 +17,7 @@
 #include "wifi_task.h"
 #include "udp_task.h"
 #include "udp_dns_server.h"
+#include "led_task.h"
 
 static void print_info(void)
 {
@@ -59,5 +60,6 @@ void app_main()
 
     /* Initialize the tasks */
     //EAST_Task_Init();
+    LED_Task_Init();
     WIFI_Task_Init();
 }
