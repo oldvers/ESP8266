@@ -26,9 +26,9 @@
 #define WIFI_SSID                    "HomeWLAN"
 #define WIFI_PSWD                    "wlanH020785endrix!"
 #define WIFI_SITE                    "home.com"
-#define WIFI_BOOT_ABSENT             (0xDEADBEEF)
-#define WIFI_BOOT_CLEAN              (0xCAFEFACE)
-#define WIFI_BOOT_GOOD               (0x00000000)
+#define WIFI_BOOT_CONFIG_IS_ABSENT   (0xDEADBEEF)
+#define WIFI_BOOT_AP_NOT_IN_RANGE    (0xCAFEFACE)
+#define WIFI_BOOT_CONNECT_TO_AP      (0xBEDECADE)
 #define EVT_WIFI_ST_STARTED          BIT0
 #define EVT_WIFI_ST_CONNECTED        BIT1
 #define EVT_WIFI_ST_GOT_IP           BIT2
@@ -280,18 +280,15 @@ static void wifi_Start(void)
     /* Prepare the WiFi parameters. Temporary in RAM */
     ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_RAM));
 
-    gWiFiBoot = WIFI_BOOT_GOOD;
-    ESP_LOGI(TAG, "Boot = 0x%08X", gWiFiBoot);
-
     /* Station mode */
-    if (true == gWiFiParams.valid)
+    if (WIFI_BOOT_CONNECT_TO_AP == gWiFiBoot)
     {
         memcpy(wifi_config.sta.ssid, gWiFiParams.ssid.data, gWiFiParams.ssid.length);
         memcpy(wifi_config.sta.password, gWiFiParams.pswd.data, gWiFiParams.pswd.length);
 
         gWiFiParams.notify_connected    = NULL;
         gWiFiParams.notify_disconnected = NULL;
-        gWiFiParams.count               = 10;
+        gWiFiParams.count               = 7;
 
         wifi_mDNS_Init();
 
@@ -315,7 +312,7 @@ static void wifi_Start(void)
 
         gWiFiParams.notify_connected    = UDP_DNS_NotifyWiFiIsConnected;
         gWiFiParams.notify_disconnected = UDP_DNS_NotifyWiFiIsDisconnected;
-        gWiFiParams.count               = 255;
+        gWiFiParams.count               = 7;
 
         ESP_LOGI(TAG, "AP \"%s\" Starting...", ap_ssid);
         ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP));
@@ -337,7 +334,7 @@ static FW_BOOLEAN wifi_Connect(void)
     FW_BOOLEAN result = FW_FALSE;
 
     /* Station mode */
-    if (true == gWiFiParams.valid)
+    if (WIFI_BOOT_CONNECT_TO_AP == gWiFiBoot)
     {
         /* Connect */
         ESP_LOGI(TAG, "Connecting to \"%s\"...", gWiFiParams.ssid.data);
@@ -363,7 +360,7 @@ static FW_BOOLEAN wifi_Connect(void)
     /* Access Point mode */
     {
         /* Wait for connection */
-        events = wifi_WaitFor(EVT_WIFI_AP_ST_CONNECTED, 10000);
+        events = wifi_WaitFor(EVT_WIFI_AP_ST_CONNECTED, 15000);
         if (0 != (events & EVT_WIFI_AP_ST_CONNECTED))
         {
             ESP_LOGI(TAG, "Connected successfuly");
@@ -383,7 +380,7 @@ static FW_BOOLEAN wifi_Connect(void)
 static void wifi_WaitForDisconnect(void)
 {
     /* Station mode */
-    if (true == gWiFiParams.valid)
+    if (WIFI_BOOT_CONNECT_TO_AP == gWiFiBoot)
     {
         (void)wifi_WaitFor(EVT_WIFI_ST_DISCONNECTED, portMAX_DELAY);
     }
@@ -545,12 +542,17 @@ static void wifi_CheckIfRestartNeeded(void)
     gWiFiParams.count--;
     if (0 == gWiFiParams.count)
     {
-        if (WIFI_BOOT_CLEAN != gWiFiBoot)
+        if (WIFI_BOOT_CONNECT_TO_AP == gWiFiBoot)
         {
-            ESP_LOGI(TAG, "Absent");
-            gWiFiBoot = WIFI_BOOT_ABSENT;
-            ESP_LOGI(TAG, "Boot = 0x%08X", gWiFiBoot);
+            ESP_LOGI(TAG, "AP is not in range!");
+            gWiFiBoot = WIFI_BOOT_AP_NOT_IN_RANGE;
         }
+        else
+        {
+            ESP_LOGI(TAG, "Try to connect to AP again!");
+            gWiFiBoot = WIFI_BOOT_CONNECT_TO_AP;
+        }
+        ESP_LOGI(TAG, "Boot = 0x%08X", gWiFiBoot);
         ESP_LOGI(TAG, "Restart");
         esp_restart();
     }
@@ -611,7 +613,7 @@ bool WIFI_SaveParams(wifi_string_p p_ssid, wifi_string_p p_pswd, wifi_string_p p
 
     /* Indicate that the MCU needs to be restarted */
     gWiFiParams.count = 1;
-    gWiFiBoot         = WIFI_BOOT_CLEAN;
+    gWiFiBoot         = WIFI_BOOT_AP_NOT_IN_RANGE;
     ESP_LOGI(TAG, "Boot = 0x%08X", gWiFiBoot);
 
     return true;
@@ -623,16 +625,24 @@ void WIFI_Task_Init(void)
 {
     /* Load WiFi parameters */
     ESP_LOGI(TAG, "Boot = 0x%08X", gWiFiBoot);
-    if ((WIFI_BOOT_ABSENT == gWiFiBoot) || (false == wifi_LoadParams(&gWiFiParams)))
+    if (false == wifi_LoadParams(&gWiFiParams))
+    {
+        gWiFiBoot = WIFI_BOOT_CONFIG_IS_ABSENT;
+    }
+    if ((WIFI_BOOT_CONFIG_IS_ABSENT == gWiFiBoot) || (WIFI_BOOT_AP_NOT_IN_RANGE == gWiFiBoot))
     {
         //wifi_ClearParams();
         UDP_DNS_Task_Init();
     }
-    else
+    else if (WIFI_BOOT_CONNECT_TO_AP == gWiFiBoot)
     {
         //wifi_ClearParams();
     }
-    HTTP_Server_Init((false == gWiFiParams.valid));
+    else
+    {
+        gWiFiBoot = WIFI_BOOT_CONNECT_TO_AP;
+    }
+    HTTP_Server_Init((WIFI_BOOT_CONNECT_TO_AP != gWiFiBoot));
 
     /* Create the events group for WiFi task */
     gWiFiEvents = xEventGroupCreate();
