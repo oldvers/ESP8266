@@ -251,6 +251,37 @@ static void led_SetIndication_Fade(void)
 }
 
 //-------------------------------------------------------------------------------------------------
+//--- PingPong LED Indication ---------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------
+
+static void led_IterateIndication_PingPong(void)
+{
+    LED_Strip_Update();
+    LED_Strip_Rotate(0 == gLeds.offset);
+
+    gLeds.led++;
+    if ((sizeof(gLeds.buffer) / 3) == gLeds.led)
+    {
+        gLeds.led    = 0;
+        gLeds.offset = ((gLeds.offset + 1) % 2);
+    }
+}
+
+//-------------------------------------------------------------------------------------------------
+
+static void led_SetIndication_PingPong(void)
+{
+    LED_Strip_Clear();
+    gLeds.offset       = 0;
+    gLeds.led          = 0;
+    LED_Strip_SetPixelColor(gLeds.led, gLeds.pixel.r, gLeds.pixel.g, gLeds.pixel.b);
+    gLeds.maxTimeCount = 3;
+    gLeds.timeCounter  = gLeds.maxTimeCount;
+    gLeds.fpIterate    = led_IterateIndication_PingPong;
+    gLeds.fpIterate();
+}
+
+//-------------------------------------------------------------------------------------------------
 
 static void led_SetIndication_FadeX(void)
 {
@@ -354,6 +385,9 @@ static void led_ProcessMsg(led_message_t * p_msg)
             break;
         case LED_CMD_INDICATE_FADE:
             led_SetIndication_Fade();
+            break;
+        case LED_CMD_INDICATE_PINGPONG:
+            led_SetIndication_PingPong();
             break;
         default:
             gLeds.command      = LED_CMD_EMPTY;
