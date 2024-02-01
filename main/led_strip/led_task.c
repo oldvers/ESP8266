@@ -12,24 +12,39 @@
 
 //-------------------------------------------------------------------------------------------------
 
-enum
-{
-    RED = 0,
-    GREEN,
-    BLUE,
-    PIXEL_LED_COUNT
-};
-
 typedef void (* iterate_fp_t)(void);
+
+typedef union
+{
+    struct
+    {
+        uint8_t r;
+        uint8_t g;
+        uint8_t b;
+    };
+    struct
+    {
+        uint8_t raw[3];
+    };
+} pixel_t;
+
+typedef struct
+{
+    double h;
+    double s;
+    double v;
+} hsv_t;
 
 typedef struct
 {
     uint8_t       command;
-    uint8_t       pixel[PIXEL_LED_COUNT];
+    pixel_t       pixel;
     uint8_t       maxTimeCount;
     uint8_t       timeCounter;
-    uint8_t       index;
-    uint8_t       padding;
+    uint8_t       offset;
+    uint8_t       padding_0;
+    uint16_t      led;
+    uint16_t      padding_1;
     iterate_fp_t  fpIterate;
     uint8_t       buffer[16*3];
 } leds_t;
@@ -40,17 +55,93 @@ static QueueHandle_t gLedQueue = {0};
 static leds_t        gLeds     = {0};
 
 //-------------------------------------------------------------------------------------------------
+
+static void led_RGBtoHSV(pixel_t * p_pixel, hsv_t * p_hsv)
+{
+    double min, max, delta;
+
+    min = (p_pixel->r < p_pixel->g) ? p_pixel->r : p_pixel->g;
+    min = (min < p_pixel->b) ? min : p_pixel->b;
+
+    max = (p_pixel->r > p_pixel->g) ? p_pixel->r : p_pixel->g;
+    max = (max > p_pixel->b) ? max : p_pixel->b;
+
+    /* Value */
+    p_hsv->v = max / 255.0;
+
+    delta = max - min;
+
+    if (max != 0)
+    {
+        /* Saturation */
+        p_hsv->s = (1.0 * delta / max); 
+    }
+    else
+    {
+        /* r = g = b = 0 */
+        /* s = 0, v is undefined */
+        p_hsv->s = 0;
+        p_hsv->h = 0;
+        return;
+    }
+
+    /* Hue */
+    if (p_pixel->r == max)
+    {
+        p_hsv->h = (p_pixel->g - p_pixel->b) / delta;
+    }
+    else if (p_pixel->g == max)
+    {
+        p_hsv->h = 2 + (p_pixel->b - p_pixel->r) / delta;
+    }
+    else
+    {
+        p_hsv->h = 4 + (p_pixel->r - p_pixel->g) / delta;
+    }
+
+    /* Convert hue to degrees and back */
+    p_hsv->h *= 60; 
+    if (p_hsv->h < 0)
+    {
+        p_hsv->h += 360;
+    }
+    p_hsv->h /= 360;
+}
+
+//-------------------------------------------------------------------------------------------------
+
+static void led_HSVtoRGB(hsv_t * p_hsv, pixel_t * p_pixel)
+{
+    double r = 0, g = 0, b = 0;
+
+    int i = (int)(p_hsv->h * 6);
+    double f = p_hsv->h * 6 - i;
+    double p = p_hsv->v * (1 - p_hsv->s);
+    double q = p_hsv->v * (1 - f * p_hsv->s);
+    double t = p_hsv->v * (1 - (1 - f) * p_hsv->s);
+
+    switch(i)
+    {
+        case 0: r = p_hsv->v, g = t, b = p; break;
+        case 1: r = q, g = p_hsv->v, b = p; break;
+        case 2: r = p, g = p_hsv->v, b = t; break;
+        case 3: r = p, g = q, b = p_hsv->v; break;
+        case 4: r = t, g = p, b = p_hsv->v; break;
+        case 5: r = p_hsv->v, g = p, b = q; break;
+    }
+
+    p_pixel->r = (uint8_t)(r * 255);
+    p_pixel->g = (uint8_t)(g * 255);
+    p_pixel->b = (uint8_t)(b * 255);
+}
+
+//-------------------------------------------------------------------------------------------------
 //--- Simple Color Indication ---------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
 
 static void led_IterateIndication_Color(void)
 {
-    uint16_t led  = 0;
-
-    for (led = 0; led < (sizeof(gLeds.buffer) / 3); led++)
-    {
-        LED_Strip_SetColor(led, gLeds.pixel[RED], gLeds.pixel[GREEN], gLeds.pixel[BLUE]);
-    }
+    LED_Strip_SetColor(gLeds.pixel.r, gLeds.pixel.g, gLeds.pixel.b);
     LED_Strip_Update();
 }
 
@@ -69,36 +160,43 @@ static void led_SetIndication_Color(void)
 
 static void led_IterateIndication_Run(void)
 {
-    static uint8_t  index                  = 1;
-    static uint16_t led                    = 0;
-    static uint8_t  pixel[PIXEL_LED_COUNT] = {255, 0, 0};
-
-    LED_Strip_SetColor(led, 0, 0, 0);
-    led = ((led + 1) % (sizeof(gLeds.buffer) / 3)); 
-    /* Switch the color R -> G -> B */
-    if (0 == led)
-    {
-        pixel[index++] = 0;
-        index %= 3;
-        pixel[index] = 255;
-    }
-    /* Set the color depending on color settings */
-    if (0 == (gLeds.pixel[RED] || gLeds.pixel[GREEN] || gLeds.pixel[BLUE]))
-    {
-        LED_Strip_SetColor(led, pixel[RED], pixel[GREEN], pixel[BLUE]);
-    }
-    else
-    {
-        LED_Strip_SetColor(led, gLeds.pixel[RED], gLeds.pixel[GREEN], gLeds.pixel[BLUE]);
-    }
-
     LED_Strip_Update();
+    LED_Strip_Rotate(false);
+    if (0xFFFF != gLeds.led)
+    {
+        gLeds.led = ((gLeds.led + 1) % (sizeof(gLeds.buffer) / 3)); 
+        /* Switch the color R -> G -> B */
+        if (0 == gLeds.led)
+        {
+            gLeds.pixel.raw[gLeds.offset++] = 0;
+            gLeds.offset %= 3;
+            gLeds.pixel.raw[gLeds.offset] = 255;
+            LED_Strip_SetPixelColor(gLeds.led, gLeds.pixel.r, gLeds.pixel.g, gLeds.pixel.b);
+        }
+    }
 }
 
 //-------------------------------------------------------------------------------------------------
 
 static void led_SetIndication_Run(void)
 {
+    LED_Strip_Clear();
+
+    /* Set the color depending on color settings */
+    if (0 == (gLeds.pixel.r || gLeds.pixel.g || gLeds.pixel.b))
+    {
+        gLeds.offset  = 0;
+        gLeds.led     = 0;
+        gLeds.pixel.r = 255;
+        LED_Strip_SetPixelColor(gLeds.led, gLeds.pixel.r, gLeds.pixel.g, gLeds.pixel.b);
+    }
+    else
+    {
+        gLeds.offset  = 0xFF;
+        gLeds.led     = 0xFFFF;
+        LED_Strip_SetPixelColor(0, gLeds.pixel.r, gLeds.pixel.g, gLeds.pixel.b);
+    }
+
     gLeds.maxTimeCount = 3;
     gLeds.timeCounter  = gLeds.maxTimeCount;
     gLeds.fpIterate    = led_IterateIndication_Run;
@@ -151,48 +249,132 @@ static void led_IterateIndication_Fade(void)
 
 static void led_SetIndication_Fade(void)
 {
-    if (0 < gLeds.pixel[RED])
+    gLeds.command   = LED_CMD_EMPTY;
+    gLeds.fpIterate = NULL;
+
+    hsv_t hsv     = {0};
+    pixel_t pixel = {0};
+
+
+    hsv.h = 0.39999;
+    hsv.s = 0.25003;
+    hsv.v = 0.07843;
+    led_HSVtoRGB(&hsv, &pixel);
+    printf("HSV: 0.%05d 0.%05d 0.%05d\n", (int)(hsv.h * 100000), (int)(hsv.s * 100000), (int)(hsv.v * 100000));
+    printf("RGB: %d %d %d\n", pixel.r, pixel.g, pixel.b);
+
+    pixel.r = 15;
+    pixel.g = 20;
+    pixel.b = 17;
+    led_RGBtoHSV(&pixel, &hsv);
+    printf("RGB: %d %d %d\n", pixel.r, pixel.g, pixel.b);
+    printf("HSV: 0.%05d 0.%05d 0.%05d\n", (int)(hsv.h * 100000), (int)(hsv.s * 100000), (int)(hsv.v * 100000));
+
+    uint16_t led  = 0;
+
+    for (led = 0; led < (sizeof(gLeds.buffer) / 3); led++)
     {
-        gLeds.index = RED;
+        hsv.h = (led * 1.0 / (sizeof(gLeds.buffer) / 3));
+        hsv.s = 1.0;
+        hsv.v = 0.1;
+        led_HSVtoRGB(&hsv, &pixel);
+        LED_Strip_SetPixelColor(led, pixel.r, pixel.g, pixel.b);
     }
-    else if (0 < gLeds.pixel[GREEN])
+    LED_Strip_Update();
+
+
+    vTaskDelay(10000 / portTICK_RATE_MS);
+
+    for (led = 0; led < 200; led++)
     {
-        gLeds.index = GREEN;
-    }
-    else if (0 < gLeds.pixel[BLUE])
-    {
-        gLeds.index = BLUE;
-    }
-    else
-    {
-        gLeds.index = PIXEL_LED_COUNT;
+        LED_Strip_Rotate(false);
+        LED_Strip_Update();
+        vTaskDelay(50 / portTICK_RATE_MS);
     }
 
-    if (PIXEL_LED_COUNT != gLeds.index)
+
+    memset(gLeds.buffer, 0, sizeof(gLeds.buffer));
+    gLeds.buffer[0] = 30;
+    for (led = 0; led < (sizeof(gLeds.buffer) / 3); led++)
     {
-        gLeds.maxTimeCount = 2;
-        gLeds.timeCounter  = gLeds.maxTimeCount;
-        memset(gLeds.buffer, 0, sizeof(gLeds.buffer));
-        gLeds.fpIterate    = led_IterateIndication_Fade;
-        gLeds.fpIterate();
+        LED_Strip_Update();
+        vTaskDelay(100 / portTICK_RATE_MS);
+        LED_Strip_Rotate(false);
     }
-    else
+    for (led = 0; led < (sizeof(gLeds.buffer) / 3); led++)
     {
-        gLeds.command      = LED_CMD_EMPTY;
-        gLeds.fpIterate    = NULL;
-        gLeds.maxTimeCount = 0;
-        gLeds.timeCounter  = 0;
+        LED_Strip_Update();
+        vTaskDelay(100 / portTICK_RATE_MS);
+        LED_Strip_Rotate(true);
     }
+
+
+    pixel.r = 158;
+    pixel.g = 23;
+    pixel.b = 200;
+    led_RGBtoHSV(&pixel, &hsv);
+    for (led = 0; led < 40; led++)
+    {
+        hsv.v = led * 0.01;
+        led_HSVtoRGB(&hsv, &pixel);
+        LED_Strip_SetColor(pixel.r, pixel.g, pixel.b);
+        LED_Strip_Update();
+        vTaskDelay(20 / portTICK_RATE_MS);
+    }
+    for (led = 40; led != 0; led--)
+    {
+        hsv.v = led * 0.01;
+        led_HSVtoRGB(&hsv, &pixel);
+        LED_Strip_SetColor(pixel.r, pixel.g, pixel.b);
+        LED_Strip_Update();
+        vTaskDelay(20 / portTICK_RATE_MS);
+    }
+
+
+
+
+//    if (0 < gLeds.pixel[RED])
+//    {
+//        gLeds.index = RED;
+//    }
+//    else if (0 < gLeds.pixel[GREEN])
+//    {
+//        gLeds.index = GREEN;
+//    }
+//    else if (0 < gLeds.pixel[BLUE])
+//    {
+//        gLeds.index = BLUE;
+//    }
+//    else
+//    {
+//        gLeds.index = PIXEL_LED_COUNT;
+//    }
+//
+//    if (PIXEL_LED_COUNT != gLeds.index)
+//    {
+//        gLeds.maxTimeCount = 2;
+//        gLeds.timeCounter  = gLeds.maxTimeCount;
+//        memset(gLeds.buffer, 0, sizeof(gLeds.buffer));
+//        gLeds.fpIterate    = led_IterateIndication_Fade;
+//        gLeds.fpIterate();
+//    }
+//    else
+//    {
+//        gLeds.command      = LED_CMD_EMPTY;
+//        gLeds.fpIterate    = NULL;
+//        gLeds.maxTimeCount = 0;
+//        gLeds.timeCounter  = 0;
+//    }
 }
 
 //-------------------------------------------------------------------------------------------------
 
 static void led_ProcessMsg(led_message_t * p_msg)
 {
-    gLeds.command      = p_msg->command;
-    gLeds.pixel[RED]   = p_msg->red;
-    gLeds.pixel[GREEN] = p_msg->green;
-    gLeds.pixel[BLUE]  = p_msg->blue;
+    gLeds.command = p_msg->command;
+    gLeds.pixel.r = p_msg->red;
+    gLeds.pixel.g = p_msg->green;
+    gLeds.pixel.b = p_msg->blue;
     switch (gLeds.command)
     {
         case LED_CMD_INDICATE_COLOR:
