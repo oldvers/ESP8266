@@ -56,7 +56,7 @@ static EventBits_t leds_WaitFor(EventBits_t events, TickType_t timeout)
 
 //-------------------------------------------------------------------------------------------------
 
-const uint8_t * IRAM_ATTR ledstrip_FillUartFifo(const uint8_t * leds, const uint8_t * end)
+uint8_t * IRAM_ATTR ledstrip_FillUartFifo(uint8_t * leds, uint8_t * end)
 {
     // Remember: UARTs send less significant bit (LSB) first so
     //      pushing ABCDEF byte will generate a 0FEDCBA1 signal,
@@ -242,7 +242,7 @@ void LED_Strip_Update(void)
 
 //-------------------------------------------------------------------------------------------------
 
-void LED_Strip_SetColor(uint16_t pixel, uint8_t r, uint8_t g, uint8_t b)
+void LED_Strip_SetPixelColor(uint16_t pixel, uint8_t r, uint8_t g, uint8_t b)
 {
     uint32_t pos = pixel * 3;
 
@@ -255,49 +255,42 @@ void LED_Strip_SetColor(uint16_t pixel, uint8_t r, uint8_t g, uint8_t b)
 
 //-------------------------------------------------------------------------------------------------
 
-static uint32_t ledstrip_HSV_to_RGB(uint32_t hue, uint32_t sat, uint32_t value, uint8_t * rgb)
+void LED_Strip_Rotate(bool direction)
 {
-    double r = 0, g = 0, b = 0;
+    uint8_t led[3];
 
-    double h = (double)hue/360.0;
-    double s = (double)sat/255.0;
-    double v = (double)value/255.0;
-
-    int i = (int)(h * 6);
-    double f = h * 6 - i;
-    double p = v * (1 - s);
-    double q = v * (1 - f * s);
-    double t = v * (1 - (1 - f) * s);
-
-    switch(i % 6)
+    if (true == direction)
     {
-        case 0: r = v, g = t, b = p; break;
-        case 1: r = q, g = v, b = p; break;
-        case 2: r = p, g = v, b = t; break;
-        case 3: r = p, g = q, b = v; break;
-        case 4: r = t, g = p, b = v; break;
-        case 5: r = v, g = p, b = q; break;
+        memcpy(led, gLeds, 3);
+        memmove(gLeds, gLeds + 3, gLedsCount - 3);
+        memcpy(gLeds + gLedsCount - 3, led, 3);
     }
-
-    rgb[0] = (uint8_t)(r * 255);
-    rgb[1] = (uint8_t)(g * 255);
-    rgb[2] = (uint8_t)(b * 255);
-    return ((rgb[0] & 0xFF) << 16) | ((rgb[1] & 0xFF) << 8) | (rgb[2] & 0xFF);
+    else
+    {
+        memcpy(led, gLeds + gLedsCount - 3, 3);
+        memmove(gLeds + 3, gLeds, gLedsCount - 3);
+        memcpy(gLeds, led, 3);
+    }
 }
 
 //-------------------------------------------------------------------------------------------------
 
-void LED_Strip_Rainbow(uint32_t sat, uint32_t val)
+void LED_Strip_Clear(void)
 {
-    uint32_t i;
-    uint32_t hue;
-    uint8_t  rgb[3];
+    memset(gLeds, 0, gLedsCount);
+}
 
-    for (i = 0; i < (gLedsCount / 3); i++)
+//-------------------------------------------------------------------------------------------------
+
+void LED_Strip_SetColor(uint8_t r, uint8_t g, uint8_t b)
+{
+    uint32_t pos = 0;
+
+    for (pos = 0; pos < gLedsCount;)
     {
-        hue = ((360 * i) / gLedsCount);
-        ledstrip_HSV_to_RGB(hue, sat, val, rgb);
-        LED_Strip_SetColor(i, rgb[0], rgb[1], rgb[2]);
+        gLeds[pos++] = r;
+        gLeds[pos++] = g;
+        gLeds[pos++] = b;
     }
 }
 
