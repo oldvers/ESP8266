@@ -282,89 +282,53 @@ static void led_SetIndication_PingPong(void)
 }
 
 //-------------------------------------------------------------------------------------------------
+//--- Rainbow LED Indication ---------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------
 
-static void led_SetIndication_FadeX(void)
+static void led_IterateIndication_Rainbow(void)
 {
-    gLeds.command   = LED_CMD_EMPTY;
-    gLeds.fpIterate = NULL;
+    LED_Strip_Rotate(false);
+    LED_Strip_Update();
+}
 
-    hsv_t hsv     = {0};
-    pixel_t pixel = {0};
+//-------------------------------------------------------------------------------------------------
 
+static void led_SetIndication_Rainbow(void)
+{
+    double max = 0.0;
 
-    hsv.h = 0.39999;
-    hsv.s = 0.25003;
-    hsv.v = 0.07843;
-    led_HSVtoRGB(&hsv, &pixel);
-    printf("HSV: 0.%05d 0.%05d 0.%05d\n", (int)(hsv.h * 100000), (int)(hsv.s * 100000), (int)(hsv.v * 100000));
-    printf("RGB: %d %d %d\n", pixel.r, pixel.g, pixel.b);
-
-    pixel.r = 15;
-    pixel.g = 20;
-    pixel.b = 17;
-    led_RGBtoHSV(&pixel, &hsv);
-    printf("RGB: %d %d %d\n", pixel.r, pixel.g, pixel.b);
-    printf("HSV: 0.%05d 0.%05d 0.%05d\n", (int)(hsv.h * 100000), (int)(hsv.s * 100000), (int)(hsv.v * 100000));
-
-    uint16_t led  = 0;
-
-    for (led = 0; led < (sizeof(gLeds.buffer) / 3); led++)
+    if (0 == (gLeds.pixel.r || gLeds.pixel.g || gLeds.pixel.b))
     {
-        hsv.h = (led * 1.0 / (sizeof(gLeds.buffer) / 3));
-        hsv.s = 1.0;
-        hsv.v = 0.1;
-        led_HSVtoRGB(&hsv, &pixel);
-        LED_Strip_SetPixelColor(led, pixel.r, pixel.g, pixel.b);
+        /* Running Rainbow */
+        max = 0.222;
+        /* Set iteration period and callback */
+        gLeds.maxTimeCount = 5;
+        gLeds.timeCounter  = gLeds.maxTimeCount;
+        gLeds.fpIterate    = led_IterateIndication_Rainbow;
+    }
+    else
+    {
+        /* Static Rainbow */
+        max = (gLeds.pixel.r > gLeds.pixel.g) ? gLeds.pixel.r : gLeds.pixel.g;
+        max = (max > gLeds.pixel.b) ? max : gLeds.pixel.b;
+        max /= 255.0;
+        /* Disable iteration */
+        gLeds.command      = LED_CMD_EMPTY;
+        gLeds.maxTimeCount = 0;
+        gLeds.timeCounter  = 0;
+        gLeds.fpIterate    = NULL;
+    }
+
+    /* Draw the Rainbow */
+    gLeds.hsv.s = 1.0;
+    gLeds.hsv.v = max;
+    for (gLeds.led = 0; gLeds.led < (sizeof(gLeds.buffer) / 3); gLeds.led++)
+    {
+        gLeds.hsv.h = (gLeds.led * 1.0 / (sizeof(gLeds.buffer) / 3));
+        led_HSVtoRGB(&gLeds.hsv, &gLeds.pixel);
+        LED_Strip_SetPixelColor(gLeds.led, gLeds.pixel.r, gLeds.pixel.g, gLeds.pixel.b);
     }
     LED_Strip_Update();
-
-
-    vTaskDelay(10000 / portTICK_RATE_MS);
-
-    for (led = 0; led < 200; led++)
-    {
-        LED_Strip_Rotate(false);
-        LED_Strip_Update();
-        vTaskDelay(50 / portTICK_RATE_MS);
-    }
-
-
-    memset(gLeds.buffer, 0, sizeof(gLeds.buffer));
-    gLeds.buffer[0] = 30;
-    for (led = 0; led < (sizeof(gLeds.buffer) / 3); led++)
-    {
-        LED_Strip_Update();
-        vTaskDelay(100 / portTICK_RATE_MS);
-        LED_Strip_Rotate(false);
-    }
-    for (led = 0; led < (sizeof(gLeds.buffer) / 3); led++)
-    {
-        LED_Strip_Update();
-        vTaskDelay(100 / portTICK_RATE_MS);
-        LED_Strip_Rotate(true);
-    }
-
-
-    pixel.r = 158;
-    pixel.g = 23;
-    pixel.b = 200;
-    led_RGBtoHSV(&pixel, &hsv);
-    for (led = 0; led < 40; led++)
-    {
-        hsv.v = led * 0.01;
-        led_HSVtoRGB(&hsv, &pixel);
-        LED_Strip_SetColor(pixel.r, pixel.g, pixel.b);
-        LED_Strip_Update();
-        vTaskDelay(20 / portTICK_RATE_MS);
-    }
-    for (led = 40; led != 0; led--)
-    {
-        hsv.v = led * 0.01;
-        led_HSVtoRGB(&hsv, &pixel);
-        LED_Strip_SetColor(pixel.r, pixel.g, pixel.b);
-        LED_Strip_Update();
-        vTaskDelay(20 / portTICK_RATE_MS);
-    }
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -388,6 +352,9 @@ static void led_ProcessMsg(led_message_t * p_msg)
             break;
         case LED_CMD_INDICATE_PINGPONG:
             led_SetIndication_PingPong();
+            break;
+        case LED_CMD_INDICATE_RAINBOW:
+            led_SetIndication_Rainbow();
             break;
         default:
             gLeds.command      = LED_CMD_EMPTY;

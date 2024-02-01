@@ -8,6 +8,7 @@
 #define LED_CMD_INDICATE_RUN        (0x02)
 #define LED_CMD_INDICATE_FADE       (0x03)
 #define LED_CMD_INDICATE_PINGPONG   (0x04)
+#define LED_CMD_INDICATE_RAINBOW    (0x05)
 
 typedef struct
 {
