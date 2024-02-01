@@ -181,7 +181,7 @@ void websocket_cb(struct tcp_pcb * pcb, uint8_t * data, uint16_t data_len, uint8
         case 0x02:
             printf("Received Color command %d bytes\n", data_len);
 
-            led_message_t msg = {LED_CMD_COLOR, data[2], data[1], data[3]};
+            led_message_t msg = {LED_CMD_INDICATE_COLOR, data[2], data[1], data[3]};
             LED_Task_SendMsg(&msg);
 
             val = 0x0200;
@@ -273,7 +273,7 @@ void HTTP_Server_Init(bool config)
     gConfig = config;
     if (gConfig)
     {
-        led_message_t msg = {LED_CMD_CONFIG, 0, 0, 0};
+        led_message_t msg = {LED_CMD_INDICATE_RUN, 0, 0, 0};
         LED_Task_SendMsg(&msg);
     }
 

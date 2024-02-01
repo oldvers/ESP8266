@@ -1,3 +1,5 @@
+#include <string.h>
+
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
@@ -10,69 +12,203 @@
 
 //-------------------------------------------------------------------------------------------------
 
-static QueueHandle_t gLedQueue   = {0};
-static uint8_t       gCommand    = LED_CMD_EMPTY;
-static uint32_t      gMax        = 0;
-static uint32_t      gCounter    = 0;
-static uint8_t       gLeds[16*3] = {0};
+enum
+{
+    RED = 0,
+    GREEN,
+    BLUE,
+    PIXEL_LED_COUNT
+};
+
+typedef void (* iterate_fp_t)(void);
+
+typedef struct
+{
+    uint8_t       command;
+    uint8_t       pixel[PIXEL_LED_COUNT];
+    uint8_t       maxTimeCount;
+    uint8_t       timeCounter;
+    uint8_t       index;
+    uint8_t       padding;
+    iterate_fp_t  fpIterate;
+    uint8_t       buffer[16*3];
+} leds_t;
 
 //-------------------------------------------------------------------------------------------------
 
-static void led_IterateIndication_Config(void)
+static QueueHandle_t gLedQueue = {0};
+static leds_t        gLeds     = {0};
+
+//-------------------------------------------------------------------------------------------------
+//--- Simple Color Indication ---------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------
+
+static void led_IterateIndication_Color(void)
 {
-    static uint8_t  col  = 1;
-    static uint16_t led  = 0;
-    static uint8_t  x[3] = {255, 0, 0};
-    static uint16_t loop = 0;
+    uint16_t led  = 0;
 
-    LED_Strip_SetColor(led, 0, 0, 0);
-    led++;
-    if (0 == (led %= (sizeof(gLeds) / 3)))
+    for (led = 0; led < (sizeof(gLeds.buffer) / 3); led++)
     {
-        x[col++] = 0;
-        col %= 3;
-        x[col] = 255;
+        LED_Strip_SetColor(led, gLeds.pixel[RED], gLeds.pixel[GREEN], gLeds.pixel[BLUE]);
     }
-    led %= (sizeof(gLeds) / 3);
-    LED_Strip_SetColor(led, x[0], x[1], x[2]);
     LED_Strip_Update();
-
-    loop++;
 }
 
 //-------------------------------------------------------------------------------------------------
 
-static void led_SetIndication_Color(uint8_t red, uint8_t green, uint8_t blue)
+static void led_SetIndication_Color(void)
 {
-    uint16_t led  = 0;
+    gLeds.command   = LED_CMD_EMPTY;
+    gLeds.fpIterate = led_IterateIndication_Color;
+    gLeds.fpIterate();
+}
 
-    for (led = 0; led < (sizeof(gLeds) / 3); led++)
+//-------------------------------------------------------------------------------------------------
+//--- Running LED Indication ----------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------
+
+static void led_IterateIndication_Run(void)
+{
+    static uint8_t  index                  = 1;
+    static uint16_t led                    = 0;
+    static uint8_t  pixel[PIXEL_LED_COUNT] = {255, 0, 0};
+
+    LED_Strip_SetColor(led, 0, 0, 0);
+    led = ((led + 1) % (sizeof(gLeds.buffer) / 3)); 
+    /* Switch the color R -> G -> B */
+    if (0 == led)
     {
-        LED_Strip_SetColor(led, red, green, blue);
+        pixel[index++] = 0;
+        index %= 3;
+        pixel[index] = 255;
     }
+    /* Set the color depending on color settings */
+    if (0 == (gLeds.pixel[RED] || gLeds.pixel[GREEN] || gLeds.pixel[BLUE]))
+    {
+        LED_Strip_SetColor(led, pixel[RED], pixel[GREEN], pixel[BLUE]);
+    }
+    else
+    {
+        LED_Strip_SetColor(led, gLeds.pixel[RED], gLeds.pixel[GREEN], gLeds.pixel[BLUE]);
+    }
+
     LED_Strip_Update();
+}
+
+//-------------------------------------------------------------------------------------------------
+
+static void led_SetIndication_Run(void)
+{
+    gLeds.maxTimeCount = 3;
+    gLeds.timeCounter  = gLeds.maxTimeCount;
+    gLeds.fpIterate    = led_IterateIndication_Run;
+    gLeds.fpIterate();
+}
+
+//-------------------------------------------------------------------------------------------------
+//--- Fade LED Indication -------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------
+
+static void led_IterateIndication_Fade(void)
+{
+//    static uint8_t  * pFadeColor    = NULL;
+//    static uint16_t * pMaxFadeValue = NULL;
+//    static uint8_t  pixel[COUNT] = {255, 0, 0};
+//
+//    if (NULL == pFadeColor)
+//    {
+//        if (0 < gLeds.red)
+//        {
+//            maxFade = gLeds.red;
+//        }
+//    }
+//
+//
+//
+//    LED_Strip_SetColor(led, 0, 0, 0);
+//    led = ((led + 1) % (sizeof(gLeds.buffer) / 3)); 
+//    /* Switch the color R -> G -> B */
+//    if (0 == led)
+//    {
+//        pixel[index++] = 0;
+//        index %= 3;
+//        pixel[index] = 255;
+//    }
+//    /* Set the color depending on color settings */
+//    if (0 == (gLeds.red || gLeds.green || gLeds.blue))
+//    {
+//        LED_Strip_SetColor(led, pixel[RED], pixel[GREEN], pixel[BLUE]);
+//    }
+//    else
+//    {
+//        LED_Strip_SetColor(led, gLeds.red, gLeds.green, gLeds.blue);
+//    }
+//
+//    LED_Strip_Update();
+}
+
+//-------------------------------------------------------------------------------------------------
+
+static void led_SetIndication_Fade(void)
+{
+    if (0 < gLeds.pixel[RED])
+    {
+        gLeds.index = RED;
+    }
+    else if (0 < gLeds.pixel[GREEN])
+    {
+        gLeds.index = GREEN;
+    }
+    else if (0 < gLeds.pixel[BLUE])
+    {
+        gLeds.index = BLUE;
+    }
+    else
+    {
+        gLeds.index = PIXEL_LED_COUNT;
+    }
+
+    if (PIXEL_LED_COUNT != gLeds.index)
+    {
+        gLeds.maxTimeCount = 2;
+        gLeds.timeCounter  = gLeds.maxTimeCount;
+        memset(gLeds.buffer, 0, sizeof(gLeds.buffer));
+        gLeds.fpIterate    = led_IterateIndication_Fade;
+        gLeds.fpIterate();
+    }
+    else
+    {
+        gLeds.command      = LED_CMD_EMPTY;
+        gLeds.fpIterate    = NULL;
+        gLeds.maxTimeCount = 0;
+        gLeds.timeCounter  = 0;
+    }
 }
 
 //-------------------------------------------------------------------------------------------------
 
 static void led_ProcessMsg(led_message_t * p_msg)
 {
-    gCommand = p_msg->command;
-    switch (gCommand)
+    gLeds.command      = p_msg->command;
+    gLeds.pixel[RED]   = p_msg->red;
+    gLeds.pixel[GREEN] = p_msg->green;
+    gLeds.pixel[BLUE]  = p_msg->blue;
+    switch (gLeds.command)
     {
-        case LED_CMD_CONFIG:
-            gMax     = 3;
-            gCounter = gMax;
-            led_IterateIndication_Config();
+        case LED_CMD_INDICATE_COLOR:
+            led_SetIndication_Color();
             break;
-        case LED_CMD_COLOR:
-            led_SetIndication_Color(p_msg->red, p_msg->green, p_msg->blue);
-            gCommand = LED_CMD_EMPTY;
+        case LED_CMD_INDICATE_RUN:
+            led_SetIndication_Run();
+            break;
+        case LED_CMD_INDICATE_FADE:
+            led_SetIndication_Fade();
             break;
         default:
-            gCommand = LED_CMD_EMPTY;
-            gMax     = 0;
-            gCounter = 0;
+            gLeds.command      = LED_CMD_EMPTY;
+            gLeds.fpIterate    = NULL;
+            gLeds.maxTimeCount = 0;
+            gLeds.timeCounter  = 0;
             break;
     }
 }
@@ -81,25 +217,16 @@ static void led_ProcessMsg(led_message_t * p_msg)
 
 static void led_Process(void)
 {
-    if (LED_CMD_EMPTY == gCommand) return;
+    if (LED_CMD_EMPTY == gLeds.command) return;
 
-    gCounter--;
-    if (0 == gCounter)
+    gLeds.timeCounter--;
+    if (0 == gLeds.timeCounter)
     {
-        switch (gCommand)
+        if (NULL != gLeds.fpIterate)
         {
-            case LED_CMD_CONFIG:
-                led_IterateIndication_Config();
-                break;
-            case LED_CMD_COLOR:
-                break;
-            default:
-                gCommand = LED_CMD_EMPTY;
-                gMax     = 0;
-                gCounter = 0;
-                break;
+            gLeds.fpIterate();
         }
-        gCounter = gMax;
+        gLeds.timeCounter = gLeds.maxTimeCount;
     }
 }
 
@@ -111,11 +238,11 @@ static void led_Task(void * pvParameters)
     led_message_t msg    = {0};
 
     printf("LED Task started...\n");
-    LED_Strip_Init(gLeds, sizeof(gLeds));
+    LED_Strip_Init(gLeds.buffer, sizeof(gLeds.buffer));
     vTaskDelay(30 / portTICK_RATE_MS);
-    led_SetIndication_Color(0, 0, 0);
+    led_SetIndication_Color();
     vTaskDelay(30 / portTICK_RATE_MS);
-    led_SetIndication_Color(0, 0, 0);
+    led_SetIndication_Color();
 
     while (FW_TRUE)
     {

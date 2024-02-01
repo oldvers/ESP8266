@@ -3,9 +3,10 @@
 
 #include <stdint.h>
 
-#define LED_CMD_EMPTY      (0xFF)
-#define LED_CMD_CONFIG     (0x00)
-#define LED_CMD_COLOR      (0x01)
+#define LED_CMD_EMPTY               (0x00)
+#define LED_CMD_INDICATE_COLOR      (0x01)
+#define LED_CMD_INDICATE_RUN        (0x02)
+#define LED_CMD_INDICATE_FADE       (0x03)
 
 typedef struct
 {
