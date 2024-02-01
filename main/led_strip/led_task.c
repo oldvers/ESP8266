@@ -45,6 +45,7 @@ typedef struct
     uint8_t       padding_0;
     uint16_t      led;
     uint16_t      padding_1;
+    hsv_t         hsv;
     iterate_fp_t  fpIterate;
     uint8_t       buffer[16*3];
 } leds_t;
@@ -209,45 +210,49 @@ static void led_SetIndication_Run(void)
 
 static void led_IterateIndication_Fade(void)
 {
-//    static uint8_t  * pFadeColor    = NULL;
-//    static uint16_t * pMaxFadeValue = NULL;
-//    static uint8_t  pixel[COUNT] = {255, 0, 0};
-//
-//    if (NULL == pFadeColor)
-//    {
-//        if (0 < gLeds.red)
-//        {
-//            maxFade = gLeds.red;
-//        }
-//    }
-//
-//
-//
-//    LED_Strip_SetColor(led, 0, 0, 0);
-//    led = ((led + 1) % (sizeof(gLeds.buffer) / 3)); 
-//    /* Switch the color R -> G -> B */
-//    if (0 == led)
-//    {
-//        pixel[index++] = 0;
-//        index %= 3;
-//        pixel[index] = 255;
-//    }
-//    /* Set the color depending on color settings */
-//    if (0 == (gLeds.red || gLeds.green || gLeds.blue))
-//    {
-//        LED_Strip_SetColor(led, pixel[RED], pixel[GREEN], pixel[BLUE]);
-//    }
-//    else
-//    {
-//        LED_Strip_SetColor(led, gLeds.red, gLeds.green, gLeds.blue);
-//    }
-//
-//    LED_Strip_Update();
+    enum
+    {
+        MAX_FADE_LEVEL = 30,
+    };
+
+    led_HSVtoRGB(&gLeds.hsv, &gLeds.pixel);
+    LED_Strip_SetColor(gLeds.pixel.r, gLeds.pixel.g, gLeds.pixel.b);
+    LED_Strip_Update();
+
+    gLeds.led++;
+    if (MAX_FADE_LEVEL == gLeds.led)
+    {
+        gLeds.led    = 0;
+        gLeds.offset = ((gLeds.offset + 1) % 2);
+    }
+    if (0 == gLeds.offset)
+    {
+        gLeds.hsv.v = (gLeds.led * 0.02);
+    }
+    else
+    {
+        gLeds.hsv.v = ((MAX_FADE_LEVEL - gLeds.led - 1) * 0.02);
+    }
 }
 
 //-------------------------------------------------------------------------------------------------
 
 static void led_SetIndication_Fade(void)
+{
+    LED_Strip_Clear();
+    led_RGBtoHSV(&gLeds.pixel, &gLeds.hsv);
+    gLeds.hsv.v        = 0.0;
+    gLeds.offset       = 0;
+    gLeds.led          = 0;
+    gLeds.maxTimeCount = 2;
+    gLeds.timeCounter  = gLeds.maxTimeCount;
+    gLeds.fpIterate    = led_IterateIndication_Fade;
+    gLeds.fpIterate();
+}
+
+//-------------------------------------------------------------------------------------------------
+
+static void led_SetIndication_FadeX(void)
 {
     gLeds.command   = LED_CMD_EMPTY;
     gLeds.fpIterate = NULL;
@@ -329,42 +334,6 @@ static void led_SetIndication_Fade(void)
         LED_Strip_Update();
         vTaskDelay(20 / portTICK_RATE_MS);
     }
-
-
-
-
-//    if (0 < gLeds.pixel[RED])
-//    {
-//        gLeds.index = RED;
-//    }
-//    else if (0 < gLeds.pixel[GREEN])
-//    {
-//        gLeds.index = GREEN;
-//    }
-//    else if (0 < gLeds.pixel[BLUE])
-//    {
-//        gLeds.index = BLUE;
-//    }
-//    else
-//    {
-//        gLeds.index = PIXEL_LED_COUNT;
-//    }
-//
-//    if (PIXEL_LED_COUNT != gLeds.index)
-//    {
-//        gLeds.maxTimeCount = 2;
-//        gLeds.timeCounter  = gLeds.maxTimeCount;
-//        memset(gLeds.buffer, 0, sizeof(gLeds.buffer));
-//        gLeds.fpIterate    = led_IterateIndication_Fade;
-//        gLeds.fpIterate();
-//    }
-//    else
-//    {
-//        gLeds.command      = LED_CMD_EMPTY;
-//        gLeds.fpIterate    = NULL;
-//        gLeds.maxTimeCount = 0;
-//        gLeds.timeCounter  = 0;
-//    }
 }
 
 //-------------------------------------------------------------------------------------------------
