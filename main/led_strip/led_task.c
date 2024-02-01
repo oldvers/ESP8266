@@ -18,7 +18,7 @@ static uint8_t       gLeds[16*3] = {0};
 
 //-------------------------------------------------------------------------------------------------
 
-static void led_Config(void)
+static void led_IterateIndication_Config(void)
 {
     static uint8_t  col  = 1;
     static uint16_t led  = 0;
@@ -42,13 +42,13 @@ static void led_Config(void)
 
 //-------------------------------------------------------------------------------------------------
 
-static void led_Color(led_message_t * p_msg)
+static void led_SetIndication_Color(uint8_t red, uint8_t green, uint8_t blue)
 {
     uint16_t led  = 0;
 
     for (led = 0; led < (sizeof(gLeds) / 3); led++)
     {
-        LED_Strip_SetColor(led, p_msg->red, p_msg->green, p_msg->blue);
+        LED_Strip_SetColor(led, red, green, blue);
     }
     LED_Strip_Update();
 }
@@ -63,10 +63,10 @@ static void led_ProcessMsg(led_message_t * p_msg)
         case LED_CMD_CONFIG:
             gMax     = 3;
             gCounter = gMax;
-            led_Config();
+            led_IterateIndication_Config();
             break;
         case LED_CMD_COLOR:
-            led_Color(p_msg);
+            led_SetIndication_Color(p_msg->red, p_msg->green, p_msg->blue);
             gCommand = LED_CMD_EMPTY;
             break;
         default:
@@ -89,7 +89,7 @@ static void led_Process(void)
         switch (gCommand)
         {
             case LED_CMD_CONFIG:
-                led_Config();
+                led_IterateIndication_Config();
                 break;
             case LED_CMD_COLOR:
                 break;
@@ -112,6 +112,10 @@ static void led_Task(void * pvParameters)
 
     printf("LED Task started...\n");
     LED_Strip_Init(gLeds, sizeof(gLeds));
+    vTaskDelay(30 / portTICK_RATE_MS);
+    led_SetIndication_Color(0, 0, 0);
+    vTaskDelay(30 / portTICK_RATE_MS);
+    led_SetIndication_Color(0, 0, 0);
 
     while (FW_TRUE)
     {
