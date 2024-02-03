@@ -62,46 +62,4 @@ void app_main()
     //EAST_Task_Init();
     LED_Task_Init();
     WiFi_Task_Init();
-
-//    led_message_t msg    = {0};
-//
-//   msg.command = LED_CMD_INDICATE_COLOR;
-//   msg.red     = 50;
-//   msg.green   = 100;
-//   msg.blue    = 200;
-//   LED_Task_SendMsg(&msg);
-//
-//   vTaskDelay(10000 / portTICK_RATE_MS);
-//
-//   msg.command = LED_CMD_INDICATE_RUN;
-//   msg.red     = 0;
-//   msg.green   = 0;
-//   msg.blue    = 0;
-//   LED_Task_SendMsg(&msg);
-//
-//   vTaskDelay(10000 / portTICK_RATE_MS);
-//
-//   msg.command = LED_CMD_INDICATE_RUN;
-//   msg.red     = 50;
-//   msg.green   = 150;
-//   msg.blue    = 20;
-//   LED_Task_SendMsg(&msg);
-//
-//   vTaskDelay(10000 / portTICK_RATE_MS);
-//
-//    msg.command = LED_CMD_INDICATE_RAINBOW;
-//    msg.red     = 15;
-//    msg.green   = 3;
-//    msg.blue    = 25;
-//    LED_Task_SendMsg(&msg);
-//
-//    vTaskDelay(10000 / portTICK_RATE_MS);
-//
-//    msg.command = LED_CMD_INDICATE_RAINBOW;
-//    msg.red     = 0;
-//    msg.green   = 0;
-//    msg.blue    = 0;
-//    LED_Task_SendMsg(&msg);
-//
-//    vTaskDelay(10000 / portTICK_RATE_MS);
 }

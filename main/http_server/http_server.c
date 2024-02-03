@@ -302,25 +302,10 @@ void HTTP_Server_Init(bool config)
     printf("SDK version: %s\n", esp_get_idf_version());
 
     gConfig = config;
-//    if (gConfig)
-//    {
-//        led_message_t msg = {LED_CMD_INDICATE_RUN, 0, 0, 0};
-//        LED_Task_SendMsg(&msg);
-//    }
-
-//    struct sdk_station_config config = {
-//        .ssid = "HomeWLAN",
-//        .password = "wlanH00785endrix!",
-//    };
-
-    /* required to call wifi_set_opmode before station_set_config */
-//    sdk_wifi_set_opmode(STATION_MODE);
-//    sdk_wifi_station_set_config(&config);
-//    sdk_wifi_station_connect();
 
     /* turn off LED */
-//    gpio_enable(LED_PIN, GPIO_OUTPUT);
-//    gpio_write(LED_PIN, true);
+    //gpio_enable(LED_PIN, GPIO_OUTPUT);
+    //gpio_write(LED_PIN, true);
 
     /* initialize tasks */
     xTaskCreate(&httpd_task, "HTTP Daemon", 2048, NULL, 2, NULL);
