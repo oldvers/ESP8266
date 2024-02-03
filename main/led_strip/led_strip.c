@@ -248,8 +248,8 @@ void LED_Strip_SetPixelColor(uint16_t pixel, uint8_t r, uint8_t g, uint8_t b)
 
     if (gLedsCount <= (pos + 2)) return;
 
-    gLeds[pos++] = r;
     gLeds[pos++] = g;
+    gLeds[pos++] = r;
     gLeds[pos++] = b;
 }
 
@@ -288,8 +288,8 @@ void LED_Strip_SetColor(uint8_t r, uint8_t g, uint8_t b)
 
     for (pos = 0; pos < gLedsCount;)
     {
-        gLeds[pos++] = r;
         gLeds[pos++] = g;
+        gLeds[pos++] = r;
         gLeds[pos++] = b;
     }
 }
