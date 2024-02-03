@@ -302,11 +302,11 @@ void HTTP_Server_Init(bool config)
     printf("SDK version: %s\n", esp_get_idf_version());
 
     gConfig = config;
-    if (gConfig)
-    {
-        led_message_t msg = {LED_CMD_INDICATE_RUN, 0, 0, 0};
-        LED_Task_SendMsg(&msg);
-    }
+//    if (gConfig)
+//    {
+//        led_message_t msg = {LED_CMD_INDICATE_RUN, 0, 0, 0};
+//        LED_Task_SendMsg(&msg);
+//    }
 
 //    struct sdk_station_config config = {
 //        .ssid = "HomeWLAN",

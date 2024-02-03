@@ -20,6 +20,7 @@
 #include "udp_task.h"
 #include "udp_dns_server.h"
 #include "http_server.h"
+#include "led_task.h"
 
 //-------------------------------------------------------------------------------------------------
 
@@ -265,6 +266,7 @@ static void wifi_Start(void)
     char                    ap_ssid[32]  = {0};
     int                     length       = 0;
     char                    addr_str[16] = {0};
+    led_message_t           led_msg      = {LED_CMD_INDICATE_FADE, 0, 0, 0};
 
     /* Prepare the events loop */
     tcpip_adapter_init();
@@ -283,6 +285,11 @@ static void wifi_Start(void)
     /* Station mode */
     if (WIFI_BOOT_CONNECT_TO_AP == gWiFiBoot)
     {
+        /* Indication - Blue Fade (wait for connection) */
+        led_msg.red  = 0;
+        led_msg.blue = 255;
+        LED_Task_SendMsg(&led_msg);
+
         memcpy(wifi_config.sta.ssid, gWiFiParams.ssid.data, gWiFiParams.ssid.length);
         memcpy(wifi_config.sta.password, gWiFiParams.pswd.data, gWiFiParams.pswd.length);
 
@@ -302,6 +309,11 @@ static void wifi_Start(void)
     else
     /* Access Point mode */
     {
+        /* Indication - Red Fade (wait for connection) */
+        led_msg.red  = 255;
+        led_msg.blue = 0;
+        LED_Task_SendMsg(&led_msg);
+
         ESP_ERROR_CHECK(esp_efuse_mac_get_default(mac));
         length = sprintf(ap_ssid, "WIFI_%02X%02X%02X%02X%02X%02X", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
         memcpy(wifi_config.ap.ssid, ap_ssid, length);
@@ -330,8 +342,9 @@ static void wifi_Start(void)
 
 static FW_BOOLEAN wifi_Connect(void)
 {
-    EventBits_t events = 0;
-    FW_BOOLEAN result = FW_FALSE;
+    EventBits_t   events  = 0;
+    FW_BOOLEAN    result  = FW_FALSE;
+    led_message_t led_msg = {0};
 
     /* Station mode */
     if (WIFI_BOOT_CONNECT_TO_AP == gWiFiBoot)
@@ -345,6 +358,11 @@ static FW_BOOLEAN wifi_Connect(void)
         if (0 != (events & EVT_WIFI_ST_GOT_IP))
         {
             ESP_LOGI(TAG, "Connected successfuly");
+
+            /* Indication - Rainbow Rotation (connected) */
+            led_msg.command = LED_CMD_INDICATE_RAINBOW;
+            LED_Task_SendMsg(&led_msg);
+
             result = FW_TRUE;
         }
         else if (0 != (events & EVT_WIFI_ST_DISCONNECTED))
@@ -364,6 +382,11 @@ static FW_BOOLEAN wifi_Connect(void)
         if (0 != (events & EVT_WIFI_AP_ST_CONNECTED))
         {
             ESP_LOGI(TAG, "Connected successfuly");
+
+            /* Indication - Running R-G-B (connected) */
+            led_msg.command = LED_CMD_INDICATE_RUN;
+            LED_Task_SendMsg(&led_msg);
+
             result = FW_TRUE;
         }
         else
@@ -379,15 +402,27 @@ static FW_BOOLEAN wifi_Connect(void)
 
 static void wifi_WaitForDisconnect(void)
 {
+    led_message_t led_msg = {LED_CMD_INDICATE_FADE, 0, 0, 0};
+
     /* Station mode */
     if (WIFI_BOOT_CONNECT_TO_AP == gWiFiBoot)
     {
         (void)wifi_WaitFor(EVT_WIFI_ST_DISCONNECTED, portMAX_DELAY);
+
+        /* Indication - Blue Fade (wait for connection) */
+        led_msg.red  = 0;
+        led_msg.blue = 255;
+        LED_Task_SendMsg(&led_msg);
     }
     else
     /* Access Point mode */
     {
         (void)wifi_WaitFor(EVT_WIFI_AP_ST_DISCONNECTED, portMAX_DELAY);
+
+        /* Indication - Red Fade (wait for connection) */
+        led_msg.red  = 255;
+        led_msg.blue = 0;
+        LED_Task_SendMsg(&led_msg);
     }
 }
 

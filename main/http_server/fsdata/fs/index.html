@@ -7,7 +7,7 @@
 		<link rel="stylesheet" type="text/css" href="css/siimple.min.ice.css">
 		<link rel="stylesheet" type="text/css" href="css/style.css">
 		<link rel="shortcut icon" href="img/favicon.png">
-		<title>HTTP Server</title>
+		<title>WebAquaLight</title>
 	</head>
 	<body>
 
@@ -16,7 +16,7 @@
             <div class="card is-shadowed">
 				<div id="status_box" class="alert is-secondary">Starting...</div>
                 <div align="center">
-                    <label class="label is-block has-size-3">Web Aqua Light</label>
+                    <label id="site" class="label is-block has-size-3">Web Aqua Light</label>
                 </div>
 				<div id="picker" align="center" class="has-pt-6 has-pb-6"></div>
                 <button class="button is-full" onclick="onSaveBtnClick()">
@@ -57,16 +57,30 @@
 		function onMessageFromServer(evt)
 		{
 			retries = 0;
-			let view    = new DataView(evt.data);
-			let command = view.getUint8(0);
-			let status  = view.getUint8(1);
+			let view    = new Uint8Array(evt.data);
+			let command = view[0];
+			let status  = view[1];
 
 			console.log("Message from server" + view);
-			
+
 			if ((0x01 == command) && (0x00 == status))
 			{
-				console.log("Configuration saved!");
-				window.location.href = "complete.html";
+				console.log("Configuration received!");
+
+				let offset = 2;
+				let ssid = getStrFromBuffer(view, offset);
+				offset += ssid.length;
+				let pwd = getStrFromBuffer(view, offset);
+				offset += pwd.length;
+				let site = getStrFromBuffer(view, offset);
+
+				console.log("Config: " + ssid.value + " " + pwd.value + " " + site.value);
+
+			    document.getElementById('site').innerText = site.value;
+			}
+			else if ((0x03 == command) && (0x00 == status))
+			{
+				console.log("Color is set!");
 			}
 			//if (val == 0xBEEF || val == 0xDEAD)
 			//	console.log("LED switched");
@@ -103,7 +117,7 @@
 				console.log(location.host);
 				ws = new WebSocket("ws://" + location.host);
 				ws.binaryType = 'arraybuffer';
-				ws.onopen = function(evt) { retries = 0; updateStatusBox("success", "Connected"); };
+				ws.onopen = function(evt) {  onConnectedToServer(evt); };
 				ws.onerror = function(evt) { updateStatusBox("danger", "Error!"); };
 				ws.onmessage = function(evt) { onMessageFromServer(evt); };
 				ws.onclose = function(evt) { updateStatusBox("warning", "Disconnected"); };
@@ -124,35 +138,22 @@
             }
 		}
 
+		function getStrFromBuffer(view, offset)
+		{
+		    let offs = offset;
+		    let len  = view[offs++];
+		    let str  = '';
+
+		    for (let i = 0; i < len; i++)
+		    {
+		        str += String.fromCharCode(view[offs++]);
+		    }
+
+		    return {value: str, length: (len + 1)};
+		}
+
 		function onSaveBtnClick()
 		{
-			/* let ssid = document.getElementById('ssid').value;
-			let pwd = document.getElementById('pwd').value;
-			let site = document.getElementById('site').value;
-
-			if (ssid === "" || pwd === "" || site === "")
-			{
-				window.alert("All the parameters must have filled values!");
-			}
-			else
-			{
-                console.log("Save button clicked: " + ssid + " " + pwd + " " + site);
-				
-				let len = 4 + ssid.length + pwd.length + site.length;
-				let offset = 0;
-                let buffer = new ArrayBuffer(len);
-                let view = new Uint8Array(buffer);
-
-				view[offset] = 0x01;
-				offset += (1);
-				putStrInBuffer(view, offset, ssid);
-				offset += (ssid.length + 1);
-				putStrInBuffer(view, offset, pwd);
-				offset += (pwd.length + 1);
-				putStrInBuffer(view, offset, site);
-				
-				wsSendToServer(buffer);
-			} */
 		}
 
 		function wsSendToServer(data)
@@ -174,13 +175,27 @@
             let buffer = new ArrayBuffer(4);
             let view = new Uint8Array(buffer);
 
-			view[0] = 0x02;
+			view[0] = 0x03;
 			view[1] = color.red;
 			view[2] = color.green;
 			view[3] = color.blue;
 				
 			wsSendToServer(buffer);
         }
+
+		function onConnectedToServer(evt)
+		{
+			retries = 0;
+			updateStatusBox("success", "Connected");
+
+			console.log("Try to get the configuration...");
+				
+            let buffer = new ArrayBuffer(1);
+            let view = new Uint8Array(buffer);
+
+			view[0] = 0x01;
+			wsSendToServer(buffer);
+		}
 
 			function startPolling() {
 				var chart = new SmoothieChart({millisPerPixel:11,grid:{fillStyle:'#ffffff',strokeStyle:'#ffffff',borderVisible:false},
