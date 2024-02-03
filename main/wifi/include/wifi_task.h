@@ -11,7 +11,8 @@ typedef struct
     char     data[WIFI_STRING_MAX_LEN + sizeof(uint32_t) - sizeof(uint8_t)];
 } wifi_string_t, * wifi_string_p;
 
-void WIFI_Task_Init(void);
-bool WIFI_SaveParams(wifi_string_p p_ssid, wifi_string_p p_pswd, wifi_string_p p_site);
+void WiFi_Task_Init(void);
+bool WiFi_SaveParams(wifi_string_p p_ssid, wifi_string_p p_pswd, wifi_string_p p_site);
+bool WiFi_GetParams(wifi_string_p p_ssid, wifi_string_p p_pswd, wifi_string_p p_site);
 
 #endif /* __WIFI_TASK_H__ */

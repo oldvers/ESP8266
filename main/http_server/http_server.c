@@ -139,6 +139,17 @@ bool websocket_parse_wifi_string(wifi_string_p p_str, uint8_t * p_buf, uint8_t *
     return true;
 }
 
+bool websocket_copy_wifi_string(uint8_t * p_buf, uint8_t * p_offset, wifi_string_p p_str)
+{
+    if ((WIFI_STRING_MAX_LEN * 3) < (*p_offset)) return false;
+    if (WIFI_STRING_MAX_LEN < p_str->length) return false;
+
+    memcpy(&p_buf[*p_offset], p_str, (p_str->length + 1));
+    *p_offset += (p_str->length + 1);
+
+    return true;
+}
+
 /**
  * This function is called when websocket frame is received.
  *
@@ -147,21 +158,41 @@ bool websocket_parse_wifi_string(wifi_string_p p_str, uint8_t * p_buf, uint8_t *
  */
 void websocket_cb(struct tcp_pcb * pcb, uint8_t * data, uint16_t data_len, uint8_t mode)
 {
+    enum
+    {
+        MAX_LEN = (4 + 3 * sizeof(wifi_string_t)),
+    };
     printf("[websocket_callback]:\n");
     //%.*s\n", (int)data_len, (char *)data);
 
-    uint8_t       response[2] = {0};
-    uint16_t      val         = 0;
-    uint32_t      rnd         = 0;
-    uint8_t       offset      = 1;
-    wifi_string_t ssid        = {0};
-    wifi_string_t pswd        = {0};
-    wifi_string_t site        = {0};
-    bool          result      = true;
+    uint8_t       response[MAX_LEN] = {0};
+    uint16_t      val               = 0;
+    uint32_t      rnd               = 0;
+    uint8_t       offset            = 1;
+    uint8_t       len               = 2;
+    wifi_string_t ssid              = {0};
+    wifi_string_t pswd              = {0};
+    wifi_string_t site              = {0};
+    bool          result            = true;
 
     switch (data[0])
     {
         case 0x01:
+            result = WiFi_GetParams(&ssid, &pswd, &site);
+            if (true == result)
+            {
+                offset = 2;
+                result &= websocket_copy_wifi_string(response, &offset, &ssid);
+                result &= websocket_copy_wifi_string(response, &offset, &pswd);
+                result &= websocket_copy_wifi_string(response, &offset, &site);
+                if (result)
+                {
+                    len = offset;
+                    val = 0x0100;
+                }
+            }
+            break;
+        case 0x02:
             result &= websocket_parse_wifi_string(&ssid, data, &offset);
             result &= websocket_parse_wifi_string(&pswd, data, &offset);
             result &= websocket_parse_wifi_string(&site, data, &offset);
@@ -172,19 +203,19 @@ void websocket_cb(struct tcp_pcb * pcb, uint8_t * data, uint16_t data_len, uint8
                 printf(" - PSWD = %s\n", pswd.data);
                 printf(" - SITE = %s\n", site.data);
             }
-            result &= WIFI_SaveParams(&ssid, &pswd, &site);
+            result &= WiFi_SaveParams(&ssid, &pswd, &site);
             if (result)
             {
-                val = 0x0100;
+                val = 0x0200;
             }
             break;
-        case 0x02:
+        case 0x03:
             printf("Received Color command %d bytes\n", data_len);
 
             led_message_t msg = {LED_CMD_INDICATE_COLOR, data[2], data[1], data[3]};
             LED_Task_SendMsg(&msg);
 
-            val = 0x0200;
+            val = 0x0300;
             break;
         case 'A': // ADC
             /* This should be done on a separate thread in 'real' applications */
@@ -208,7 +239,7 @@ void websocket_cb(struct tcp_pcb * pcb, uint8_t * data, uint16_t data_len, uint8
     response[1] = (uint8_t) val;
     response[0] = val >> 8;
 
-    websocket_write(pcb, response, 2, WS_BIN_MODE);
+    websocket_write(pcb, response, len, WS_BIN_MODE);
 }
 
 /**

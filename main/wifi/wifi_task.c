@@ -24,7 +24,7 @@
 //-------------------------------------------------------------------------------------------------
 
 #define WIFI_SSID                    "HomeWLAN"
-#define WIFI_PSWD                    "wlanH020785endrix!"
+#define WIFI_PSWD                    "************"
 #define WIFI_SITE                    "home.com"
 #define WIFI_BOOT_CONFIG_IS_ABSENT   (0xDEADBEEF)
 #define WIFI_BOOT_AP_NOT_IN_RANGE    (0xCAFEFACE)
@@ -581,7 +581,7 @@ static void wifi_Task(void * pvParams)
 
 //-------------------------------------------------------------------------------------------------
 
-bool WIFI_SaveParams(wifi_string_p p_ssid, wifi_string_p p_pswd, wifi_string_p p_site)
+bool WiFi_SaveParams(wifi_string_p p_ssid, wifi_string_p p_pswd, wifi_string_p p_site)
 {
     nvs_handle h_nvs  = 0;
     esp_err_t  status = ESP_OK;
@@ -621,7 +621,29 @@ bool WIFI_SaveParams(wifi_string_p p_ssid, wifi_string_p p_pswd, wifi_string_p p
 
 //-------------------------------------------------------------------------------------------------
 
-void WIFI_Task_Init(void)
+bool WiFi_GetParams(wifi_string_p p_ssid, wifi_string_p p_pswd, wifi_string_p p_site)
+{
+    if (true == gWiFiParams.valid)
+    {
+        memcpy(p_ssid, &gWiFiParams.ssid, sizeof(wifi_string_t));
+        memcpy(p_pswd, &gWiFiParams.pswd, sizeof(wifi_string_t));
+        memcpy(p_site, &gWiFiParams.site, sizeof(wifi_string_t));
+
+        ESP_LOGI
+        (
+            TAG, "Get params:\n  - SSID:%d:%s\n  - PSWD:%d:%s\n  - SITE:%d:%s",
+            p_ssid->length, p_ssid->data,
+            p_pswd->length, p_pswd->data,
+            p_site->length, p_site->data
+        );
+    }
+
+    return gWiFiParams.valid;
+}
+
+//-------------------------------------------------------------------------------------------------
+
+void WiFi_Task_Init(void)
 {
     /* Load WiFi parameters */
     ESP_LOGI(TAG, "Boot = 0x%08X", gWiFiBoot);

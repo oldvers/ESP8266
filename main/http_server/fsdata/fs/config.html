@@ -7,7 +7,7 @@
 		<link rel="stylesheet" type="text/css" href="css/siimple.min.ice.css">
 		<link rel="stylesheet" type="text/css" href="css/style.css">
 		<link rel="shortcut icon" href="img/favicon.png">
-		<title>HTTP Server</title>
+		<title>WebAquaLight Config</title>
 	</head>
 	<body>
 
@@ -64,13 +64,30 @@
 		function onMessageFromServer(evt)
 		{
 			//retries = 0;
-			let view    = new DataView(evt.data);
-			let command = view.getUint8(0);
-			let status  = view.getUint8(1);
+			let view    = new Uint8Array(evt.data);
+			let command = view[0];
+			let status  = view[1];
 
-			console.log("Message from server" + view);
-			
+			console.log("Message from server: " + view);
+
 			if ((0x01 == command) && (0x00 == status))
+			{
+				console.log("Configuration received!");
+
+				let offset = 2;
+				let ssid = getStrFromBuffer(view, offset);
+				offset += ssid.length;
+				let pwd = getStrFromBuffer(view, offset);
+				offset += pwd.length;
+				let site = getStrFromBuffer(view, offset);
+
+				console.log("Config: " + ssid.value + " " + pwd.value + " " + site.value);
+
+				document.getElementById('ssid').value = ssid.value;
+			    document.getElementById('pwd').value = pwd.value;
+			    document.getElementById('site').value = site.value;
+			}
+			else if ((0x02 == command) && (0x00 == status))
 			{
 				console.log("Configuration saved!");
 				window.location.href = "complete";
@@ -110,7 +127,7 @@
 				console.log(location.host);
 				ws = new WebSocket("ws://" + location.host);
 				ws.binaryType = 'arraybuffer';
-				ws.onopen = function(evt) { retries = 0; updateStatusBox("success", "Connected"); };
+				ws.onopen = function(evt) { onConnectedToServer(evt); };
 				ws.onerror = function(evt) { updateStatusBox("danger", "Error!"); };
 				ws.onmessage = function(evt) { onMessageFromServer(evt); };
 				ws.onclose = function(evt) { updateStatusBox("warning", "Disconnected"); };
@@ -129,6 +146,20 @@
 			{
                 view[offs] = string.charCodeAt(i);
             }
+		}
+
+		function getStrFromBuffer(view, offset)
+		{
+		    let offs = offset;
+		    let len  = view[offs++];
+		    let str  = '';
+
+		    for (let i = 0; i < len; i++)
+		    {
+		        str += String.fromCharCode(view[offs++]);
+		    }
+
+		    return {value: str, length: (len + 1)};
 		}
 
 		function onSaveBtnClick()
@@ -150,7 +181,7 @@
                 let buffer = new ArrayBuffer(len);
                 let view = new Uint8Array(buffer);
 
-				view[offset] = 0x01;
+				view[offset] = 0x02;
 				offset += (1);
 				putStrInBuffer(view, offset, ssid);
 				offset += (ssid.length + 1);
@@ -172,6 +203,20 @@
 			{
 				ws.send(data);
 			}
+		}
+
+		function onConnectedToServer(evt)
+		{
+			retries = 0;
+			updateStatusBox("success", "Connected");
+
+			console.log("Try to get the configuration...");
+				
+            let buffer = new ArrayBuffer(1);
+            let view = new Uint8Array(buffer);
+
+			view[0] = 0x01;
+			wsSendToServer(buffer);
 		}
 
 			function startPolling() {
