@@ -9,5 +9,6 @@ void LED_Strip_SetPixelColor(uint16_t pixel, uint8_t r, uint8_t g, uint8_t b);
 void LED_Strip_Rotate(bool direction);
 void LED_Strip_Clear(void);
 void LED_Strip_SetColor(uint8_t r, uint8_t g, uint8_t b);
+void LED_Strip_GetAverageColor(uint8_t * p_r, uint8_t * p_g, uint8_t * p_b);
 
 #endif /* __LED_STRIP_H__ */

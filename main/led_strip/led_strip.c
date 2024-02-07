@@ -295,3 +295,24 @@ void LED_Strip_SetColor(uint8_t r, uint8_t g, uint8_t b)
 }
 
 //-------------------------------------------------------------------------------------------------
+
+void LED_Strip_GetAverageColor(uint8_t * p_r, uint8_t * p_g, uint8_t * p_b)
+{
+    uint16_t r = 0, g = 0, b = 0;
+    uint32_t pos = 0;
+
+    for (pos = 0; pos < gLedsCount;)
+    {
+        g += gLeds[pos++];
+        r += gLeds[pos++];
+        b += gLeds[pos++];
+    }
+
+    pos = (gLedsCount / 3);
+
+    *p_r = (uint8_t)(r / pos);
+    *p_g = (uint8_t)(g / pos);
+    *p_b = (uint8_t)(b / pos);
+}
+
+//-------------------------------------------------------------------------------------------------

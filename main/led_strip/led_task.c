@@ -40,11 +40,10 @@ typedef struct
     uint8_t       command;
     pixel_t       pixel;
     uint8_t       maxTimeCount;
+    pixel_t       last;
     uint8_t       timeCounter;
     uint8_t       offset;
-    uint8_t       padding_0;
     uint16_t      led;
-    uint16_t      padding_1;
     hsv_t         hsv;
     iterate_fp_t  fpIterate;
     uint8_t       buffer[16*3];
@@ -137,12 +136,50 @@ static void led_HSVtoRGB(hsv_t * p_hsv, pixel_t * p_pixel)
 }
 
 //-------------------------------------------------------------------------------------------------
+
+// Performs linear interpolation between two values
+static double led_LinearInterpolation(double a, double b, double t)
+{
+    return a + (b - a) * t;
+}
+
+//-------------------------------------------------------------------------------------------------
+
+// Performs smooth color transition between two RGB colors
+static void led_SmoothColorTransition(pixel_t * p_a, pixel_t * p_b, double prgs, pixel_t * p_r)
+{
+    // Clamp progress value between 0 and 1
+    if (prgs < 0) prgs = 0;
+    if (prgs > 1) prgs = 1;
+
+    // Interpolate each RGB component separately
+    p_r->r = (uint8_t)led_LinearInterpolation(p_a->r, p_b->r, prgs);
+    p_r->g = (uint8_t)led_LinearInterpolation(p_a->g, p_b->g, prgs);
+    p_r->b = (uint8_t)led_LinearInterpolation(p_a->b, p_b->b, prgs);
+}
+
+//-------------------------------------------------------------------------------------------------
 //--- Simple Color Indication ---------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
 
 static void led_IterateIndication_Color(void)
 {
-    LED_Strip_SetColor(gLeds.pixel.r, gLeds.pixel.g, gLeds.pixel.b);
+    pixel_t result = {0};
+
+    if (100 > gLeds.offset)
+    {
+        led_SmoothColorTransition(&gLeds.last, &gLeds.pixel, gLeds.offset * 0.01, &result);
+        LED_Strip_SetColor(result.r, result.g, result.b);
+        gLeds.offset++;
+    }
+    else
+    {
+        LED_Strip_SetColor(gLeds.pixel.r, gLeds.pixel.g, gLeds.pixel.b);
+        gLeds.last.r = gLeds.pixel.r;
+        gLeds.last.g = gLeds.pixel.g;
+        gLeds.last.b = gLeds.pixel.b;
+        gLeds.command = LED_CMD_EMPTY;
+    }
     LED_Strip_Update();
 }
 
@@ -150,7 +187,12 @@ static void led_IterateIndication_Color(void)
 
 static void led_SetIndication_Color(void)
 {
-    gLeds.command   = LED_CMD_EMPTY;
+    gLeds.offset       = 0;
+    gLeds.maxTimeCount = 3;
+    gLeds.timeCounter  = gLeds.maxTimeCount;
+
+    LED_Strip_GetAverageColor(&gLeds.last.r, &gLeds.last.g, &gLeds.last.b);
+
     gLeds.fpIterate = led_IterateIndication_Color;
     gLeds.fpIterate();
 }
@@ -163,7 +205,7 @@ static void led_IterateIndication_Run(void)
 {
     LED_Strip_Update();
     LED_Strip_Rotate(false);
-    if (0xFFFF != gLeds.led)
+    if (UINT16_MAX != gLeds.led)
     {
         gLeds.led = ((gLeds.led + 1) % (sizeof(gLeds.buffer) / 3)); 
         /* Switch the color R -> G -> B */
@@ -171,7 +213,7 @@ static void led_IterateIndication_Run(void)
         {
             gLeds.pixel.raw[gLeds.offset++] = 0;
             gLeds.offset %= 3;
-            gLeds.pixel.raw[gLeds.offset] = 255;
+            gLeds.pixel.raw[gLeds.offset] = UINT8_MAX;
             LED_Strip_SetPixelColor(gLeds.led, gLeds.pixel.r, gLeds.pixel.g, gLeds.pixel.b);
         }
     }
@@ -188,13 +230,13 @@ static void led_SetIndication_Run(void)
     {
         gLeds.offset  = 0;
         gLeds.led     = 0;
-        gLeds.pixel.r = 255;
+        gLeds.pixel.r = UINT8_MAX;
         LED_Strip_SetPixelColor(gLeds.led, gLeds.pixel.r, gLeds.pixel.g, gLeds.pixel.b);
     }
     else
     {
-        gLeds.offset  = 0xFF;
-        gLeds.led     = 0xFFFF;
+        gLeds.offset  = UINT8_MAX;
+        gLeds.led     = UINT16_MAX;
         LED_Strip_SetPixelColor(0, gLeds.pixel.r, gLeds.pixel.g, gLeds.pixel.b);
     }
 
@@ -392,9 +434,11 @@ static void led_Task(void * pvParameters)
     printf("LED Task started...\n");
     LED_Strip_Init(gLeds.buffer, sizeof(gLeds.buffer));
     vTaskDelay(30 / portTICK_RATE_MS);
-    led_SetIndication_Color();
+    LED_Strip_Clear();
+    LED_Strip_Update();
     vTaskDelay(30 / portTICK_RATE_MS);
-    led_SetIndication_Color();
+    LED_Strip_Clear();
+    LED_Strip_Update();
 
     while (FW_TRUE)
     {
