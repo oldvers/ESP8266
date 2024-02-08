@@ -210,7 +210,7 @@ void websocket_cb(struct tcp_pcb * pcb, uint8_t * data, uint16_t data_len, uint8
             }
             break;
         case 0x03:
-            printf("Received Color command %d bytes\n", data_len);
+            printf("Received Color - R:%d G:%d B:%d\n", data[1], data[2], data[3]);
 
             led_message_t msg = {LED_CMD_INDICATE_COLOR, data[1], data[2], data[3]};
             LED_Task_SendMsg(&msg);

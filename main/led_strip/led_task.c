@@ -170,7 +170,7 @@ static void led_IterateIndication_Color(void)
     {
         led_SmoothColorTransition(&gLeds.last, &gLeds.pixel, gLeds.offset * 0.01, &result);
         LED_Strip_SetColor(result.r, result.g, result.b);
-        gLeds.offset++;
+        gLeds.offset += 3;
     }
     else
     {
