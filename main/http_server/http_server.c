@@ -30,7 +30,7 @@ enum
     SSI_LED_STATE
 };
 
-static bool    gConfig         = false;
+static bool gConfig = false;
 
 int32_t ssi_handler(int32_t iIndex, char * pcInsert, int32_t iInsertLen)
 {
@@ -302,6 +302,7 @@ void HTTP_Server_Init(bool config)
     printf("SDK version: %s\n", esp_get_idf_version());
 
     gConfig = config;
+    printf("HTTP Config = %d\n", gConfig);
 
     /* turn off LED */
     //gpio_enable(LED_PIN, GPIO_OUTPUT);

@@ -699,6 +699,7 @@ void WiFi_Task_Init(void)
     {
         gWiFiBoot = WIFI_BOOT_CONNECT_TO_AP;
     }
+    ESP_LOGI(TAG, "Config = %d", (WIFI_BOOT_CONNECT_TO_AP != gWiFiBoot));
     HTTP_Server_Init((WIFI_BOOT_CONNECT_TO_AP != gWiFiBoot));
 
     /* Create the events group for WiFi task */

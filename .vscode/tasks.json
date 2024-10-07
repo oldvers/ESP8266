@@ -57,9 +57,9 @@
             "args": [
                 "${env:IDF_PATH}\\tools\\idf.py",
                 "-p",
-                "COM64",
+                "${env:ESP_FLASH_PORT}",
                 "-b",
-                "921600",
+                "${env:ESP_FLASH_BAUD}",
                 "flash"
             ],
             "group": "build",
@@ -74,9 +74,9 @@
             "args": [
                 "${env:IDF_PATH}\\components\\esptool_py\\esptool\\esptool.py",
                 "-p",
-                "COM64",
+                "${env:ESP_FLASH_PORT}",
                 "-b",
-                "921600",
+                "${env:ESP_FLASH_BAUD}",
                 "-c",
                 "esp8266",
                 "erase_flash"
@@ -93,7 +93,7 @@
             "args": [
                 "${env:IDF_PATH}\\tools\\idf.py",
                 "-p",
-                "COM6",
+                "${env:ESP_FLASH_PORT}",
                 "flash",
                 "monitor"
             ],

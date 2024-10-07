@@ -1943,14 +1943,27 @@ static struct fs_file * http_get_inet_or_redirect_file(struct http_state * hs, c
     }
     else if (NULL != strstr(*uri, "redirect"))
     {
-        *uri      = "/index.html";
-        err_t err = fs_open(&hs->file_handle, *uri);
-        if (err == ERR_OK)
+        /* We have been asked for the default root file */
+        /* Try each of the configured default filenames until we find one
+           that exists. */
+        for (size_t loop = 0; loop < g_psDefaultFilenames.count; loop++)
         {
-            result = &hs->file_handle;
-            //*uri = NULL;
-            // return NULL;
+            HTTPD_LOGI("Looking for %s...", g_psDefaultFilenames.names[loop].name);
+            err_t err = fs_open(&hs->file_handle, (char *)g_psDefaultFilenames.names[loop].name);
+            *uri = (char *)g_psDefaultFilenames.names[loop].name;
+            if (err == ERR_OK)
+            {
+                result = &hs->file_handle;
+                HTTPD_LOGI("Opened");
+                break;
+            }
         }
+        //*uri      = "/index.html";
+        //err_t err = fs_open(&hs->file_handle, *uri);
+        //if (err == ERR_OK)
+        //{
+        //    result = &hs->file_handle;
+        //}
     }
 
     if (NULL != result)
