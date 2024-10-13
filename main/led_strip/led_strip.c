@@ -29,7 +29,7 @@
    due to accessed from ISR */
 static DRAM_ATTR uart_dev_t * const gUART        = &uart0;
 static uint8_t *                    gLeds        = NULL;
-static uint8_t                      gLedsCount   = 0;
+static uint16_t                     gLedsCount   = 0;
 static EventGroupHandle_t           gLedsEvents  = NULL;
 
 static uint8_t *                    gStart       = NULL;
@@ -220,7 +220,7 @@ static void ledstrip_UpdateUart(void)
 
 //-------------------------------------------------------------------------------------------------
 
-void LED_Strip_Init(uint8_t * leds, uint8_t count)
+void LED_Strip_Init(uint8_t * leds, uint16_t count)
 {
     gLeds      = leds;
     gLedsCount = count;
