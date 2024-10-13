@@ -2,21 +2,29 @@
 #define __LED_TASK_H__
 
 #include <stdint.h>
+#include "led_strip.h"
 
-#define LED_CMD_EMPTY               (0x00)
-#define LED_CMD_INDICATE_COLOR      (0x01)
-#define LED_CMD_INDICATE_RUN        (0x02)
-#define LED_CMD_INDICATE_FADE       (0x03)
-#define LED_CMD_INDICATE_PINGPONG   (0x04)
-#define LED_CMD_INDICATE_RAINBOW    (0x05)
+typedef enum
+{
+    LED_CMD_EMPTY,
+    LED_CMD_INDICATE_COLOR,
+    LED_CMD_INDICATE_RGB_CIRCULATION,
+    LED_CMD_INDICATE_FADE,
+    LED_CMD_INDICATE_PINGPONG,
+    LED_CMD_INDICATE_RAINBOW_CIRCULATION,
+    LED_CMD_SWITCH_OFF,
+} led_command_t;
 
 typedef struct
 {
-    uint8_t command;
-    uint8_t red;
-    uint8_t green;
-    uint8_t blue;
+    led_command_t command;
+    led_color_t   src_color;
+    led_color_t   dst_color;
+    uint32_t      interval;
+    uint32_t      duration;
 } led_message_t;
+
+#define LED_TASK_PIXELS_COUNT (16)
 
 void LED_Task_Init(void);
 void LED_Task_SendMsg(led_message_t * p_msg);

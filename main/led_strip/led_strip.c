@@ -17,6 +17,7 @@
 #include "driver/uart.h"
 #include "driver/uart_select.h"
 
+#include "led_strip.h"
 
 #define LEDS_ENTER_CRITICAL()      portENTER_CRITICAL()
 #define LEDS_EXIT_CRITICAL()       portEXIT_CRITICAL()
@@ -242,15 +243,15 @@ void LED_Strip_Update(void)
 
 //-------------------------------------------------------------------------------------------------
 
-void LED_Strip_SetPixelColor(uint16_t pixel, uint8_t r, uint8_t g, uint8_t b)
+void LED_Strip_SetPixelColor(uint16_t pixel, led_color_t * p_color)
 {
     uint32_t pos = pixel * 3;
 
     if (gLedsCount <= (pos + 2)) return;
 
-    gLeds[pos++] = g;
-    gLeds[pos++] = r;
-    gLeds[pos++] = b;
+    gLeds[pos++] = p_color->g;
+    gLeds[pos++] = p_color->r;
+    gLeds[pos++] = p_color->b;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -282,21 +283,21 @@ void LED_Strip_Clear(void)
 
 //-------------------------------------------------------------------------------------------------
 
-void LED_Strip_SetColor(uint8_t r, uint8_t g, uint8_t b)
+void LED_Strip_SetColor(led_color_t * p_color)
 {
     uint32_t pos = 0;
 
     for (pos = 0; pos < gLedsCount;)
     {
-        gLeds[pos++] = g;
-        gLeds[pos++] = r;
-        gLeds[pos++] = b;
+        gLeds[pos++] = p_color->g;
+        gLeds[pos++] = p_color->r;
+        gLeds[pos++] = p_color->b;
     }
 }
 
 //-------------------------------------------------------------------------------------------------
 
-void LED_Strip_GetAverageColor(uint8_t * p_r, uint8_t * p_g, uint8_t * p_b)
+void LED_Strip_GetAverageColor(led_color_t * p_color)
 {
     uint16_t r = 0, g = 0, b = 0;
     uint32_t pos = 0;
@@ -310,9 +311,9 @@ void LED_Strip_GetAverageColor(uint8_t * p_r, uint8_t * p_g, uint8_t * p_b)
 
     pos = (gLedsCount / 3);
 
-    *p_r = (uint8_t)(r / pos);
-    *p_g = (uint8_t)(g / pos);
-    *p_b = (uint8_t)(b / pos);
+    p_color->r = (uint8_t)(r / pos);
+    p_color->g = (uint8_t)(g / pos);
+    p_color->b = (uint8_t)(b / pos);
 }
 
 //-------------------------------------------------------------------------------------------------

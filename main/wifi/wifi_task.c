@@ -266,7 +266,7 @@ static void wifi_Start(void)
     char                    ap_ssid[32]  = {0};
     int                     length       = 0;
     char                    addr_str[16] = {0};
-    led_message_t           led_msg      = {LED_CMD_INDICATE_FADE, 0, 0, 0};
+    led_message_t           led_msg      = {0};
 
     /* Prepare the events loop */
     tcpip_adapter_init();
@@ -282,12 +282,15 @@ static void wifi_Start(void)
     /* Prepare the WiFi parameters. Temporary in RAM */
     ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_RAM));
 
+    /* Set the command for indication */
+    led_msg.command = LED_CMD_INDICATE_FADE; 
+
     /* Station mode */
     if (WIFI_BOOT_CONNECT_TO_AP == gWiFiBoot)
     {
         /* Indication - Blue Fade (wait for connection) */
-        led_msg.red  = 0;
-        led_msg.blue = 255;
+        led_msg.dst_color.r = 0;
+        led_msg.dst_color.b = 255;
         LED_Task_SendMsg(&led_msg);
 
         memcpy(wifi_config.sta.ssid, gWiFiParams.ssid.data, gWiFiParams.ssid.length);
@@ -310,8 +313,8 @@ static void wifi_Start(void)
     /* Access Point mode */
     {
         /* Indication - Red Fade (wait for connection) */
-        led_msg.red  = 255;
-        led_msg.blue = 0;
+        led_msg.dst_color.r = 255;
+        led_msg.dst_color.b = 0;
         LED_Task_SendMsg(&led_msg);
 
         ESP_ERROR_CHECK(esp_efuse_mac_get_default(mac));
@@ -360,7 +363,7 @@ static FW_BOOLEAN wifi_Connect(void)
             ESP_LOGI(TAG, "Connected successfuly");
 
             /* Indication - Rainbow Rotation (connected) */
-            led_msg.command = LED_CMD_INDICATE_RAINBOW;
+            led_msg.command = LED_CMD_INDICATE_RAINBOW_CIRCULATION;
             LED_Task_SendMsg(&led_msg);
 
             result = FW_TRUE;
@@ -384,7 +387,7 @@ static FW_BOOLEAN wifi_Connect(void)
             ESP_LOGI(TAG, "Connected successfuly");
 
             /* Indication - Running R-G-B (connected) */
-            led_msg.command = LED_CMD_INDICATE_RUN;
+            led_msg.command = LED_CMD_INDICATE_RGB_CIRCULATION;
             LED_Task_SendMsg(&led_msg);
 
             result = FW_TRUE;
@@ -402,7 +405,10 @@ static FW_BOOLEAN wifi_Connect(void)
 
 static void wifi_WaitForDisconnect(void)
 {
-    led_message_t led_msg = {LED_CMD_INDICATE_FADE, 0, 0, 0};
+    led_message_t led_msg = {0};
+
+    /* Set the command for indication */
+    led_msg.command = LED_CMD_INDICATE_FADE;
 
     /* Station mode */
     if (WIFI_BOOT_CONNECT_TO_AP == gWiFiBoot)
@@ -410,8 +416,8 @@ static void wifi_WaitForDisconnect(void)
         (void)wifi_WaitFor(EVT_WIFI_ST_DISCONNECTED, portMAX_DELAY);
 
         /* Indication - Blue Fade (wait for connection) */
-        led_msg.red  = 0;
-        led_msg.blue = 255;
+        led_msg.dst_color.r = 0;
+        led_msg.dst_color.b = 255;
         LED_Task_SendMsg(&led_msg);
     }
     else
@@ -420,8 +426,8 @@ static void wifi_WaitForDisconnect(void)
         (void)wifi_WaitFor(EVT_WIFI_AP_ST_DISCONNECTED, portMAX_DELAY);
 
         /* Indication - Red Fade (wait for connection) */
-        led_msg.red  = 255;
-        led_msg.blue = 0;
+        led_msg.dst_color.r = 255;
+        led_msg.dst_color.b = 0;
         LED_Task_SendMsg(&led_msg);
     }
 }

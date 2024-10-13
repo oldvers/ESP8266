@@ -14,20 +14,6 @@
 
 typedef void (* iterate_fp_t)(void);
 
-typedef union
-{
-    struct
-    {
-        uint8_t r;
-        uint8_t g;
-        uint8_t b;
-    };
-    struct
-    {
-        uint8_t raw[3];
-    };
-} pixel_t;
-
 typedef struct
 {
     double h;
@@ -37,16 +23,16 @@ typedef struct
 
 typedef struct
 {
-    uint8_t       command;
-    pixel_t       pixel;
-    uint8_t       maxTimeCount;
-    pixel_t       last;
-    uint8_t       timeCounter;
-    uint8_t       offset;
+    led_command_t command;
+    led_color_t   dst_color;
+    led_color_t   src_color;
+    uint32_t      time_interval;
+    uint32_t      time_counter;
+    uint16_t      offset;
     uint16_t      led;
     hsv_t         hsv;
-    iterate_fp_t  fpIterate;
-    uint8_t       buffer[16*3];
+    iterate_fp_t  fp_iterate;
+    uint8_t       buffer[LED_TASK_PIXELS_COUNT * 3];
 } leds_t;
 
 //-------------------------------------------------------------------------------------------------
@@ -56,15 +42,15 @@ static leds_t        gLeds     = {0};
 
 //-------------------------------------------------------------------------------------------------
 
-static void led_RGBtoHSV(pixel_t * p_pixel, hsv_t * p_hsv)
+static void led_RGBtoHSV(led_color_t * p_color, hsv_t * p_hsv)
 {
     double min, max, delta;
 
-    min = (p_pixel->r < p_pixel->g) ? p_pixel->r : p_pixel->g;
-    min = (min < p_pixel->b) ? min : p_pixel->b;
+    min = (p_color->r < p_color->g) ? p_color->r : p_color->g;
+    min = (min < p_color->b) ? min : p_color->b;
 
-    max = (p_pixel->r > p_pixel->g) ? p_pixel->r : p_pixel->g;
-    max = (max > p_pixel->b) ? max : p_pixel->b;
+    max = (p_color->r > p_color->g) ? p_color->r : p_color->g;
+    max = (max > p_color->b) ? max : p_color->b;
 
     /* Value */
     p_hsv->v = max / 255.0;
@@ -86,17 +72,17 @@ static void led_RGBtoHSV(pixel_t * p_pixel, hsv_t * p_hsv)
     }
 
     /* Hue */
-    if (p_pixel->r == max)
+    if (p_color->r == max)
     {
-        p_hsv->h = (p_pixel->g - p_pixel->b) / delta;
+        p_hsv->h = (p_color->g - p_color->b) / delta;
     }
-    else if (p_pixel->g == max)
+    else if (p_color->g == max)
     {
-        p_hsv->h = 2 + (p_pixel->b - p_pixel->r) / delta;
+        p_hsv->h = 2 + (p_color->b - p_color->r) / delta;
     }
     else
     {
-        p_hsv->h = 4 + (p_pixel->r - p_pixel->g) / delta;
+        p_hsv->h = 4 + (p_color->r - p_color->g) / delta;
     }
 
     /* Convert hue to degrees and back */
@@ -110,7 +96,7 @@ static void led_RGBtoHSV(pixel_t * p_pixel, hsv_t * p_hsv)
 
 //-------------------------------------------------------------------------------------------------
 
-static void led_HSVtoRGB(hsv_t * p_hsv, pixel_t * p_pixel)
+static void led_HSVtoRGB(hsv_t * p_hsv, led_color_t * p_color)
 {
     double r = 0, g = 0, b = 0;
 
@@ -130,9 +116,9 @@ static void led_HSVtoRGB(hsv_t * p_hsv, pixel_t * p_pixel)
         case 5: r = p_hsv->v, g = p, b = q; break;
     }
 
-    p_pixel->r = (uint8_t)(r * 255);
-    p_pixel->g = (uint8_t)(g * 255);
-    p_pixel->b = (uint8_t)(b * 255);
+    p_color->r = (uint8_t)(r * 255);
+    p_color->g = (uint8_t)(g * 255);
+    p_color->b = (uint8_t)(b * 255);
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -146,7 +132,13 @@ static double led_LinearInterpolation(double a, double b, double t)
 //-------------------------------------------------------------------------------------------------
 
 // Performs smooth color transition between two RGB colors
-static void led_SmoothColorTransition(pixel_t * p_a, pixel_t * p_b, double prgs, pixel_t * p_r)
+static void led_SmoothColorTransition
+(
+    led_color_t * p_a,
+    led_color_t * p_b,
+    double prgs,
+    led_color_t * p_r
+)
 {
     // Clamp progress value between 0 and 1
     if (prgs < 0) prgs = 0;
@@ -164,20 +156,19 @@ static void led_SmoothColorTransition(pixel_t * p_a, pixel_t * p_b, double prgs,
 
 static void led_IterateIndication_Color(void)
 {
-    pixel_t result = {0};
+    led_color_t result  = {0};
+    double      percent = gLeds.offset * 0.01;
 
-    if (100 > gLeds.offset)
+    if ((gLeds.dst_color.dword != gLeds.src_color.dword) && (100 > gLeds.offset))
     {
-        led_SmoothColorTransition(&gLeds.last, &gLeds.pixel, gLeds.offset * 0.01, &result);
-        LED_Strip_SetColor(result.r, result.g, result.b);
+        led_SmoothColorTransition(&gLeds.src_color, &gLeds.dst_color, percent, &result);
+        LED_Strip_SetColor(&result);
         gLeds.offset += 3;
     }
     else
     {
-        LED_Strip_SetColor(gLeds.pixel.r, gLeds.pixel.g, gLeds.pixel.b);
-        gLeds.last.r = gLeds.pixel.r;
-        gLeds.last.g = gLeds.pixel.g;
-        gLeds.last.b = gLeds.pixel.b;
+        LED_Strip_SetColor(&gLeds.dst_color);
+        gLeds.src_color.dword = gLeds.dst_color.dword;
         gLeds.command = LED_CMD_EMPTY;
     }
     LED_Strip_Update();
@@ -185,23 +176,28 @@ static void led_IterateIndication_Color(void)
 
 //-------------------------------------------------------------------------------------------------
 
-static void led_SetIndication_Color(void)
+static void led_SetIndication_Color(led_message_t * p_msg)
 {
-    gLeds.offset       = 0;
-    gLeds.maxTimeCount = 3;
-    gLeds.timeCounter  = gLeds.maxTimeCount;
+    gLeds.dst_color.dword = 0;
+    gLeds.dst_color.r     = p_msg->dst_color.r;
+    gLeds.dst_color.g     = p_msg->dst_color.g;
+    gLeds.dst_color.b     = p_msg->dst_color.b;
+    gLeds.src_color.dword = 0;
+    gLeds.offset          = 0;
+    gLeds.time_interval   = 3;
+    gLeds.time_counter    = gLeds.time_interval;
 
-    LED_Strip_GetAverageColor(&gLeds.last.r, &gLeds.last.g, &gLeds.last.b);
+    LED_Strip_GetAverageColor(&gLeds.src_color);
 
-    gLeds.fpIterate = led_IterateIndication_Color;
-    gLeds.fpIterate();
+    gLeds.fp_iterate = led_IterateIndication_Color;
+    gLeds.fp_iterate();
 }
 
 //-------------------------------------------------------------------------------------------------
 //--- Running LED Indication ----------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
 
-static void led_IterateIndication_Run(void)
+static void led_IterateIndication_RgbCirculation(void)
 {
     LED_Strip_Update();
     LED_Strip_Rotate(false);
@@ -211,39 +207,44 @@ static void led_IterateIndication_Run(void)
         /* Switch the color R -> G -> B */
         if (0 == gLeds.led)
         {
-            gLeds.pixel.raw[gLeds.offset++] = 0;
+            gLeds.dst_color.bytes[gLeds.offset++] = 0;
             gLeds.offset %= 3;
-            gLeds.pixel.raw[gLeds.offset] = UINT8_MAX;
-            LED_Strip_SetPixelColor(gLeds.led, gLeds.pixel.r, gLeds.pixel.g, gLeds.pixel.b);
+            gLeds.dst_color.bytes[gLeds.offset] = UINT8_MAX;
+            LED_Strip_SetPixelColor(gLeds.led, &gLeds.dst_color);
         }
     }
 }
 
 //-------------------------------------------------------------------------------------------------
 
-static void led_SetIndication_Run(void)
+static void led_SetIndication_RgbCirculation(led_message_t * p_msg)
 {
     LED_Strip_Clear();
 
+    gLeds.dst_color.dword = 0;
+    gLeds.dst_color.r     = p_msg->dst_color.r;
+    gLeds.dst_color.g     = p_msg->dst_color.g;
+    gLeds.dst_color.b     = p_msg->dst_color.b;
+
     /* Set the color depending on color settings */
-    if (0 == (gLeds.pixel.r || gLeds.pixel.g || gLeds.pixel.b))
+    if (0 == gLeds.dst_color.dword)
     {
-        gLeds.offset  = 0;
-        gLeds.led     = 0;
-        gLeds.pixel.r = UINT8_MAX;
-        LED_Strip_SetPixelColor(gLeds.led, gLeds.pixel.r, gLeds.pixel.g, gLeds.pixel.b);
+        gLeds.offset      = 0;
+        gLeds.led         = 0;
+        gLeds.dst_color.r = UINT8_MAX;
+        LED_Strip_SetPixelColor(gLeds.led, &gLeds.dst_color);
     }
     else
     {
         gLeds.offset  = UINT8_MAX;
         gLeds.led     = UINT16_MAX;
-        LED_Strip_SetPixelColor(0, gLeds.pixel.r, gLeds.pixel.g, gLeds.pixel.b);
+        LED_Strip_SetPixelColor(0, &gLeds.dst_color);
     }
 
-    gLeds.maxTimeCount = 3;
-    gLeds.timeCounter  = gLeds.maxTimeCount;
-    gLeds.fpIterate    = led_IterateIndication_Run;
-    gLeds.fpIterate();
+    gLeds.time_interval = 3;
+    gLeds.time_counter  = gLeds.time_interval;
+    gLeds.fp_iterate    = led_IterateIndication_RgbCirculation;
+    gLeds.fp_iterate();
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -257,8 +258,8 @@ static void led_IterateIndication_Fade(void)
         MAX_FADE_LEVEL = 30,
     };
 
-    led_HSVtoRGB(&gLeds.hsv, &gLeds.pixel);
-    LED_Strip_SetColor(gLeds.pixel.r, gLeds.pixel.g, gLeds.pixel.b);
+    led_HSVtoRGB(&gLeds.hsv, &gLeds.dst_color);
+    LED_Strip_SetColor(&gLeds.dst_color);
     LED_Strip_Update();
 
     gLeds.led++;
@@ -279,17 +280,23 @@ static void led_IterateIndication_Fade(void)
 
 //-------------------------------------------------------------------------------------------------
 
-static void led_SetIndication_Fade(void)
+static void led_SetIndication_Fade(led_message_t * p_msg)
 {
     LED_Strip_Clear();
-    led_RGBtoHSV(&gLeds.pixel, &gLeds.hsv);
-    gLeds.hsv.v        = 0.0;
-    gLeds.offset       = 0;
-    gLeds.led          = 0;
-    gLeds.maxTimeCount = 2;
-    gLeds.timeCounter  = gLeds.maxTimeCount;
-    gLeds.fpIterate    = led_IterateIndication_Fade;
-    gLeds.fpIterate();
+
+    gLeds.dst_color.dword = 0;
+    gLeds.dst_color.r     = p_msg->dst_color.r;
+    gLeds.dst_color.g     = p_msg->dst_color.g;
+    gLeds.dst_color.b     = p_msg->dst_color.b;
+
+    led_RGBtoHSV(&gLeds.dst_color, &gLeds.hsv);
+    gLeds.hsv.v         = 0.0;
+    gLeds.offset        = 0;
+    gLeds.led           = 0;
+    gLeds.time_interval = 2;
+    gLeds.time_counter  = gLeds.time_interval;
+    gLeds.fp_iterate    = led_IterateIndication_Fade;
+    gLeds.fp_iterate();
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -311,23 +318,28 @@ static void led_IterateIndication_PingPong(void)
 
 //-------------------------------------------------------------------------------------------------
 
-static void led_SetIndication_PingPong(void)
+static void led_SetIndication_PingPong(led_message_t * p_msg)
 {
     LED_Strip_Clear();
-    gLeds.offset       = 0;
-    gLeds.led          = 0;
-    LED_Strip_SetPixelColor(gLeds.led, gLeds.pixel.r, gLeds.pixel.g, gLeds.pixel.b);
-    gLeds.maxTimeCount = 3;
-    gLeds.timeCounter  = gLeds.maxTimeCount;
-    gLeds.fpIterate    = led_IterateIndication_PingPong;
-    gLeds.fpIterate();
+
+    gLeds.dst_color.dword = 0;
+    gLeds.dst_color.r     = p_msg->dst_color.r;
+    gLeds.dst_color.g     = p_msg->dst_color.g;
+    gLeds.dst_color.b     = p_msg->dst_color.b;
+    gLeds.offset          = 0;
+    gLeds.led             = 0;
+    LED_Strip_SetPixelColor(gLeds.led, &gLeds.dst_color);
+    gLeds.time_interval = 3;
+    gLeds.time_counter  = gLeds.time_interval;
+    gLeds.fp_iterate    = led_IterateIndication_PingPong;
+    gLeds.fp_iterate();
 }
 
 //-------------------------------------------------------------------------------------------------
 //--- Rainbow LED Indication ---------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
 
-static void led_IterateIndication_Rainbow(void)
+static void led_IterateIndication_RainbowCirculation(void)
 {
     LED_Strip_Rotate(false);
     LED_Strip_Update();
@@ -335,30 +347,35 @@ static void led_IterateIndication_Rainbow(void)
 
 //-------------------------------------------------------------------------------------------------
 
-static void led_SetIndication_Rainbow(void)
+static void led_SetIndication_RainbowCirculation(led_message_t * p_msg)
 {
     double max = 0.0;
 
-    if (0 == (gLeds.pixel.r || gLeds.pixel.g || gLeds.pixel.b))
+    gLeds.dst_color.dword = 0;
+    gLeds.dst_color.r     = p_msg->dst_color.r;
+    gLeds.dst_color.g     = p_msg->dst_color.g;
+    gLeds.dst_color.b     = p_msg->dst_color.b;
+
+    if (0 == gLeds.dst_color.dword)
     {
         /* Running Rainbow */
         max = 0.222;
         /* Set iteration period and callback */
-        gLeds.maxTimeCount = 5;
-        gLeds.timeCounter  = gLeds.maxTimeCount;
-        gLeds.fpIterate    = led_IterateIndication_Rainbow;
+        gLeds.time_interval = 5;
+        gLeds.time_counter  = gLeds.time_interval;
+        gLeds.fp_iterate    = led_IterateIndication_RainbowCirculation;
     }
     else
     {
         /* Static Rainbow */
-        max = (gLeds.pixel.r > gLeds.pixel.g) ? gLeds.pixel.r : gLeds.pixel.g;
-        max = (max > gLeds.pixel.b) ? max : gLeds.pixel.b;
+        max = (gLeds.dst_color.r > gLeds.dst_color.g) ? gLeds.dst_color.r : gLeds.dst_color.g;
+        max = (max > gLeds.dst_color.b) ? max : gLeds.dst_color.b;
         max /= 255.0;
         /* Disable iteration */
-        gLeds.command      = LED_CMD_EMPTY;
-        gLeds.maxTimeCount = 0;
-        gLeds.timeCounter  = 0;
-        gLeds.fpIterate    = NULL;
+        gLeds.command       = LED_CMD_EMPTY;
+        gLeds.time_interval = 0;
+        gLeds.time_counter  = 0;
+        gLeds.fp_iterate    = NULL;
     }
 
     /* Draw the Rainbow */
@@ -366,9 +383,9 @@ static void led_SetIndication_Rainbow(void)
     gLeds.hsv.v = max;
     for (gLeds.led = 0; gLeds.led < (sizeof(gLeds.buffer) / 3); gLeds.led++)
     {
-        gLeds.hsv.h = (gLeds.led * 1.0 / (sizeof(gLeds.buffer) / 3));
-        led_HSVtoRGB(&gLeds.hsv, &gLeds.pixel);
-        LED_Strip_SetPixelColor(gLeds.led, gLeds.pixel.r, gLeds.pixel.g, gLeds.pixel.b);
+        gLeds.hsv.h = ((gLeds.led + 0.5) * 1.0 / (sizeof(gLeds.buffer) / 3));
+        led_HSVtoRGB(&gLeds.hsv, &gLeds.dst_color);
+        LED_Strip_SetPixelColor(gLeds.led, &gLeds.dst_color);
     }
     LED_Strip_Update();
 }
@@ -377,32 +394,29 @@ static void led_SetIndication_Rainbow(void)
 
 static void led_ProcessMsg(led_message_t * p_msg)
 {
-    gLeds.command = p_msg->command;
-    gLeds.pixel.r = p_msg->red;
-    gLeds.pixel.g = p_msg->green;
-    gLeds.pixel.b = p_msg->blue;
+    gLeds.command         = p_msg->command;
     switch (gLeds.command)
     {
         case LED_CMD_INDICATE_COLOR:
-            led_SetIndication_Color();
+            led_SetIndication_Color(p_msg);
             break;
-        case LED_CMD_INDICATE_RUN:
-            led_SetIndication_Run();
+        case LED_CMD_INDICATE_RGB_CIRCULATION:
+            led_SetIndication_RgbCirculation(p_msg);
             break;
         case LED_CMD_INDICATE_FADE:
-            led_SetIndication_Fade();
+            led_SetIndication_Fade(p_msg);
             break;
         case LED_CMD_INDICATE_PINGPONG:
-            led_SetIndication_PingPong();
+            led_SetIndication_PingPong(p_msg);
             break;
-        case LED_CMD_INDICATE_RAINBOW:
-            led_SetIndication_Rainbow();
+        case LED_CMD_INDICATE_RAINBOW_CIRCULATION:
+            led_SetIndication_RainbowCirculation(p_msg);
             break;
         default:
-            gLeds.command      = LED_CMD_EMPTY;
-            gLeds.fpIterate    = NULL;
-            gLeds.maxTimeCount = 0;
-            gLeds.timeCounter  = 0;
+            gLeds.command       = LED_CMD_EMPTY;
+            gLeds.fp_iterate    = NULL;
+            gLeds.time_interval = 0;
+            gLeds.time_counter  = 0;
             break;
     }
 }
@@ -413,14 +427,14 @@ static void led_Process(void)
 {
     if (LED_CMD_EMPTY == gLeds.command) return;
 
-    gLeds.timeCounter--;
-    if (0 == gLeds.timeCounter)
+    gLeds.time_counter--;
+    if (0 == gLeds.time_counter)
     {
-        if (NULL != gLeds.fpIterate)
+        if (NULL != gLeds.fp_iterate)
         {
-            gLeds.fpIterate();
+            gLeds.fp_iterate();
         }
-        gLeds.timeCounter = gLeds.maxTimeCount;
+        gLeds.time_counter = gLeds.time_interval;
     }
 }
 

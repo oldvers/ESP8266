@@ -60,19 +60,19 @@ char * gpio_cgi_handler(int iIndex, int iNumParams, char * pcParam[], char * pcV
     {
         if (strcmp(pcParam[i], "on") == 0)
         {
-            uint8_t gpio_num = atoi(pcValue[i]);
+//          uint8_t gpio_num = atoi(pcValue[i]);
 //          gpio_enable(gpio_num, GPIO_OUTPUT);
 //          gpio_write(gpio_num, true);
         }
         else if (strcmp(pcParam[i], "off") == 0)
         {
-            uint8_t gpio_num = atoi(pcValue[i]);
+//          uint8_t gpio_num = atoi(pcValue[i]);
 //          gpio_enable(gpio_num, GPIO_OUTPUT);
 //          gpio_write(gpio_num, false);
         }
         else if (strcmp(pcParam[i], "toggle") == 0)
         {
-            uint8_t gpio_num = atoi(pcValue[i]);
+//          uint8_t gpio_num = atoi(pcValue[i]);
 //          gpio_enable(gpio_num, GPIO_OUTPUT);
 //          gpio_toggle(gpio_num);
         }
@@ -212,7 +212,14 @@ void websocket_cb(struct tcp_pcb * pcb, uint8_t * data, uint16_t data_len, uint8
         case 0x03:
             printf("Received Color - R:%d G:%d B:%d\n", data[1], data[2], data[3]);
 
-            led_message_t msg = {LED_CMD_INDICATE_COLOR, data[1], data[2], data[3]};
+            led_message_t msg =
+            {
+                .command = LED_CMD_INDICATE_COLOR,
+                .src_color = {.bytes = {0}},
+                .dst_color = {.r = data[1], .g = data[2], .b = data[3]},
+                .interval = 0,
+                .duration = 0
+            };
             LED_Task_SendMsg(&msg);
 
             val = 0x0300;
