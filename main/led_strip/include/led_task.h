@@ -12,6 +12,8 @@ typedef enum
     LED_CMD_INDICATE_FADE,
     LED_CMD_INDICATE_PINGPONG,
     LED_CMD_INDICATE_RAINBOW_CIRCULATION,
+    LED_CMD_INDICATE_RAINBOW,
+    LED_CMD_INDICATE_SINE,
     LED_CMD_SWITCH_OFF,
 } led_command_t;
 
@@ -28,5 +30,6 @@ typedef struct
 
 void LED_Task_Init(void);
 void LED_Task_SendMsg(led_message_t * p_msg);
+void LED_Task_Test(void);
 
 #endif /* __LED_TASK_H__ */

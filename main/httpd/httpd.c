@@ -220,10 +220,12 @@
 #define WS_LOG     0
 
 #if (1 == HTTPD_LOG)
+static const char * g_tagHTTPD = "HTTPD";
 #    define HTTPD_LOGI(...)  ESP_LOGI(g_tagHTTPD, __VA_ARGS__)
 #    define HTTPD_LOGE(...)  ESP_LOGI(g_tagHTTPD, __VA_ARGS__)
 #    define HTTPD_LOGV(...)
 #elif (2 == HTTPD_LOG)
+static const char * g_tagHTTPD = "HTTPD";
 #    define HTTPD_LOGI(...)  ESP_LOGI(g_tagHTTPD, __VA_ARGS__)
 #    define HTTPD_LOGE(...)  ESP_LOGI(g_tagHTTPD, __VA_ARGS__)
 #    define HTTPD_LOGV(...)  ESP_LOGI(g_tagHTTPD, __VA_ARGS__)
@@ -234,10 +236,12 @@
 #endif
 
 #if (1 == WS_LOG)
+static const char * g_tagWS = "WS";
 #    define WS_LOGI(...)  ESP_LOGI(g_tagWS, __VA_ARGS__)
 #    define WS_LOGE(...)  ESP_LOGI(g_tagWS, __VA_ARGS__)
 #    define WS_LOGV(...)
 #elif (2 == WS_LOG)
+static const char * g_tagWS = "WS";
 #    define WS_LOGI(...)  ESP_LOGI(g_tagWS, __VA_ARGS__)
 #    define WS_LOGE(...)  ESP_LOGI(g_tagWS, __VA_ARGS__)
 #    define WS_LOGV(...)  ESP_LOGI(g_tagWS, __VA_ARGS__)
@@ -477,9 +481,6 @@ static void http_continue(void * connection);
 tSSIHandler   g_pfnSSIHandler = NULL;
 int           g_iNumTags      = 0;
 const char ** g_ppcTags       = NULL;
-
-static const char * g_tagHTTPD = "HTTPD";
-static const char * g_tagWS    = "WS";
 
 #define LEN_TAG_LEAD_IN 5
 const char * const g_pcTagLeadIn = "<!--#";

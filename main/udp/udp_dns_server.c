@@ -59,13 +59,15 @@
 #define DNS_LOG  0
 
 #if (1 == DNS_LOG)
-#    define DNS_LOGI(...)  ESP_LOGI(TAG, __VA_ARGS__)
-#    define DNS_LOGE(...)  ESP_LOGI(TAG, __VA_ARGS__)
+static const char * gTAG = "DNS";
+#    define DNS_LOGI(...)  ESP_LOGI(gTAG, __VA_ARGS__)
+#    define DNS_LOGE(...)  ESP_LOGI(gTAG, __VA_ARGS__)
 #    define DNS_LOGV(...)
 #elif (2 == DNS_LOG)
-#    define DNS_LOGI(...)  ESP_LOGI(TAG, __VA_ARGS__)
-#    define DNS_LOGE(...)  ESP_LOGI(TAG, __VA_ARGS__)
-#    define DNS_LOGV(...)  ESP_LOGI(TAG, __VA_ARGS__)
+static const char * gTAG = "DNS";
+#    define DNS_LOGI(...)  ESP_LOGI(gTAG, __VA_ARGS__)
+#    define DNS_LOGE(...)  ESP_LOGI(gTAG, __VA_ARGS__)
+#    define DNS_LOGV(...)  ESP_LOGI(gTAG, __VA_ARGS__)
 #else
 #    define DNS_LOGI(...)
 #    define DNS_LOGE(...)
@@ -142,12 +144,21 @@ static const char * gURL[] =
 
 //-------------------------------------------------------------------------------------------------
 
-static const char *       TAG              = "DNS";
 static EventGroupHandle_t gDnsEvents       = NULL;
 static uint32_t           gIpAddr          = 0;
 static uint8_t            gDnsBuffer[1024] = {0};
 
 //-------------------------------------------------------------------------------------------------
+
+#if (2 == DNS_LOG)
+#define DNS_LOG_Q_BUF_DECL()      char log[DNS_MAX_OCTET_LEN] = {0}
+#define DNS_LOG_Q_BUF()           log
+#define DNS_LOG_Q_APPEND(idx,chr) log[idx] = chr
+#else
+#define DNS_LOG_Q_BUF_DECL()
+#define DNS_LOG_Q_BUF()
+#define DNS_LOG_Q_APPEND(...)
+#endif
 
 static int dns_ParseQuestion
 (
@@ -160,7 +171,8 @@ static int dns_ParseQuestion
 {
     uint16_t i, length, j;
     char *   question               = p_pkt->data;
-    char     log[DNS_MAX_OCTET_LEN] = {0};
+
+    DNS_LOG_Q_BUF_DECL();
 
     if (DNS_MAX_OCTET_LEN < size)
     {
@@ -175,10 +187,10 @@ static int dns_ParseQuestion
         for (j = 0; j < length; j++)
         {
             *p_name++ = question[i + j];
-            log[j] = question[i + j];
+            DNS_LOG_Q_APPEND(j, question[i + j]);
         }
-        log[j] = '\0';
-        DNS_LOGV("  - Size: %d - Question: %s", length, log);
+        DNS_LOG_Q_APPEND(j, '\0');
+        DNS_LOGV("  - Size: %d - Question: %s", length, DNS_LOG_Q_BUF());
 
         *p_name++ = '.';
         i += length;
@@ -198,19 +210,28 @@ static int dns_ParseQuestion
 
 //-------------------------------------------------------------------------------------------------
 
+#if (2 == DNS_LOG)
+#define DNS_LOG_R_ID_DECL() uint16_t id = ntohs(p_pkt->header.id)
+#define DNS_LOG_R_ID()      id
+#else
+#define DNS_LOG_R_ID_DECL()
+#define DNS_LOG_R_ID()
+#endif
+
 static int dns_ParseRequest(uint8_t * p_buf, int16_t size, /*uint32_t ip,*/ char * p_name)
 {
     dns_packet_t * p_pkt                   = (dns_packet_t *)p_buf;
     uint16_t       qdcount                 = ntohs(p_pkt->header.qdcount);
-    uint16_t       id                      = ntohs(p_pkt->header.id);
     uint16_t       type                    = 0;
     uint16_t       class                   = 0;
     int            result                  = 0;
 
+    DNS_LOG_R_ID_DECL();
+
     /* Parse only single queries. */
     if ((QR_QUERY == p_pkt->header.qr) && (1 == qdcount))
     {
-        DNS_LOGV("--- ID: %d - QR: %d - QD Count: %d", id, p_pkt->header.qr, qdcount);
+        DNS_LOGV("--- ID: %d - QR: %d - QD Count: %d", DNS_LOG_R_ID(), p_pkt->header.qr, qdcount);
         DNS_LOGV("  - Data Size: %d", (size - sizeof(p_pkt->header)));
 
         size = (size - sizeof(p_pkt->header));
