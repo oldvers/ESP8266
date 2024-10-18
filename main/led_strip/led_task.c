@@ -61,8 +61,8 @@ typedef struct
 #if (1 == LED_TASK_LOG)
 static const char * gTAG = "LED";
 #    define LED_LOGI(...)  ESP_LOGI(gTAG, __VA_ARGS__)
-#    define LED_LOGE(...)  ESP_LOGI(gTAG, __VA_ARGS__)
-#    define LED_LOGV(...)  ESP_LOGI(gTAG, __VA_ARGS__)
+#    define LED_LOGE(...)  ESP_LOGE(gTAG, __VA_ARGS__)
+#    define LED_LOGV(...)  ESP_LOGV(gTAG, __VA_ARGS__)
 #else
 #    define LED_LOGI(...)
 #    define LED_LOGE(...)
@@ -208,7 +208,7 @@ static void led_IterateIndication_Color(void)
     LED_Strip_SetColor(&result);
     LED_Strip_Update();
 
-    LED_LOGV("C(%d.%d.%d)-P:%d", result.r, result.g, result.b, (uint32_t)(100 * percent));
+    LED_LOGI("C(%d.%d.%d)-P:%d", result.r, result.g, result.b, (uint32_t)(100 * percent));
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -510,7 +510,7 @@ static void led_IterateIndication_Rainbow(void)
     LED_Strip_SetColor(&result);
     LED_Strip_Update();
 
-    LED_LOGV("C(%d.%d.%d)-P:%d", result.r, result.g, result.b, (uint32_t)(100 * percent));
+    LED_LOGI("C(%d.%d.%d)-P:%d", result.r, result.g, result.b, (uint32_t)(100 * percent));
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -584,7 +584,7 @@ static void led_IterateIndication_Sine(void)
     LED_Strip_SetColor(&result);
     LED_Strip_Update();
 
-    LED_LOGV("C(%d.%d.%d)-P:%d", result.r, result.g, result.b, (uint32_t)(100 * percent));
+    LED_LOGI("C(%d.%d.%d)-P:%d", result.r, result.g, result.b, (uint32_t)(100 * percent));
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -696,7 +696,7 @@ static void led_Task(void * pvParameters)
     BaseType_t    status = pdFAIL;
     led_message_t msg    = {0};
 
-    LED_LOGV("LED Task started...");
+    LED_LOGI("LED Task started...");
 
     LED_Strip_Init(gLeds.buffer, sizeof(gLeds.buffer));
     vTaskDelay(30 / portTICK_RATE_MS);
@@ -734,7 +734,7 @@ void LED_Task_Init(void)
 
 void LED_Task_SendMsg(led_message_t * p_msg)
 {
-    LED_LOGV
+    LED_LOGI
     (
         "Msg->C:%d-S(%d.%d.%d)-D(%d.%d.%d)-I:%d",
         p_msg->command,
@@ -1049,6 +1049,8 @@ static void led_Test_Sine(void)
 
 static void led_Test_DayNight(void)
 {
+    #define RGBA(rv,gv,bv,av) {.r=rv,.g=gv,.b=bv,.a=av}
+
     typedef struct
     {
         uint32_t      start;
@@ -1061,26 +1063,26 @@ static void led_Test_DayNight(void)
     led_message_t led_msg = {0};
     uint8_t       p       = 0;
 
-    /* Start             -    0 minutes - RGB(  0,   0, 128) - RGB(  0,   0, 128) - Smooth      */
-    /* MorningBlueHour   -  429 minutes - RGB(  0,   0, 128) - RGB(179,   0, 160) - Rainbow CW  */
-    /* MorningGoldenHour -  442 minutes - RGB(179,   0, 160) - RGB(220, 220,   0) - Rainbow CW  */
+    /* Start             -    0 minutes - RGB(  0,   0,  32) - RGB(  0,   0,  44) - Smooth      */
+    /* MorningBlueHour   -  429 minutes - RGB(  0,   0,  44) - RGB( 64,   0,  56) - Rainbow CW  */
+    /* MorningGoldenHour -  442 minutes - RGB( 64,   0,  56) - RGB(220, 220,   0) - Rainbow CW  */
     /* Rise              -  461 minutes                                                         */
     /* Day               -  505 minutes - RGB(220, 220,   0) - RGB(255, 255, 255) - Sine        */
     /* Noon              -  791 minutes                                                         */
-    /* EveningGoldenHour - 1076 minutes - RGB(220, 220,   0) - RGB(179,   0, 160) - Rainbow CCW */
-    /* Set               - 1120 minutes - RGB(179,   0, 160) - RGB(  0,   0, 128) - Rainbow CCW */
-    /* EveningBlueHour   - 1140 minutes                                                         */
-    /* Night             - 1153 minutes - RGB(  0,   0, 128) - RGB(  0,   0, 128) - None        */
+    /* EveningGoldenHour - 1076 minutes - RGB(220, 220,   0) - RGB( 64,   0,  56) - Rainbow CCW */
+    /* Set               - 1120 minutes                                                         */
+    /* EveningBlueHour   - 1140 minutes - RGB( 64,   0,  56) - RGB(  0,   0,  44) - Rainbow CCW */
+    /* Night             - 1153 minutes - RGB(  0,   0,  44) - RGB(  0,   0,  32) - None        */
 
     time_point_t points[] =
     {
-        {.start =    0, .end =  429, {.r =   0, .g =   0, .b =  32, .a = 1}, {.r =   0, .g =   0, .b =  32, .a = 1}, .cmd = LED_CMD_INDICATE_COLOR},
-        {.start =  429, .end =  442, {.r =   0, .g =   0, .b =  32, .a = 0}, {.r =  64, .g =   0, .b =  56, .a = 1}, .cmd = LED_CMD_INDICATE_RAINBOW},
-        {.start =  442, .end =  505, {.r =  64, .g =   0, .b =  56, .a = 0}, {.r = 220, .g = 220, .b =   0, .a = 1}, .cmd = LED_CMD_INDICATE_RAINBOW},
-        {.start =  505, .end = 1076, {.r = 220, .g = 220, .b =   0, .a = 1}, {.r = 255, .g = 255, .b = 255, .a = 1}, .cmd = LED_CMD_INDICATE_SINE},
-        {.start = 1076, .end = 1140, {.r = 220, .g = 220, .b =   0, .a = 1}, {.r =  64, .g =   0, .b =  56, .a = 0}, .cmd = LED_CMD_INDICATE_RAINBOW},
-        {.start = 1140, .end = 1153, {.r =  64, .g =   0, .b =  56, .a = 1}, {.r =   0, .g =   0, .b =  32, .a = 0}, .cmd = LED_CMD_INDICATE_RAINBOW},
-        {.start = 1153, .end = 1440, {.r =   0, .g =   0, .b =  32, .a = 1}, {.r =   0, .g =   0, .b =  32, .a = 1}, .cmd = LED_CMD_INDICATE_COLOR},
+        {   0,  429, RGBA(  0,   0,  32, 1), RGBA(  0,   0,  44, 1), LED_CMD_INDICATE_COLOR},
+        { 429,  442, RGBA(  0,   0,  44, 0), RGBA( 64,   0,  56, 1), LED_CMD_INDICATE_RAINBOW},
+        { 442,  505, RGBA( 64,   0,  56, 0), RGBA(220, 220,   0, 1), LED_CMD_INDICATE_RAINBOW},
+        { 505, 1076, RGBA(220, 220,   0, 1), RGBA(255, 255, 255, 1), LED_CMD_INDICATE_SINE},
+        {1076, 1140, RGBA(220, 220,   0, 1), RGBA( 64,   0,  56, 0), LED_CMD_INDICATE_RAINBOW},
+        {1140, 1153, RGBA( 64,   0,  56, 1), RGBA(  0,   0,  44, 0), LED_CMD_INDICATE_RAINBOW},
+        {1153, 1440, RGBA(  0,   0,  44, 1), RGBA(  0,   0,  32, 1), LED_CMD_INDICATE_COLOR},
     };
 
     for (p = 0; p < (sizeof(points)/sizeof(time_point_t)); p++)

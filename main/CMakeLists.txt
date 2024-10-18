@@ -8,7 +8,8 @@ set( include_dirs
      "httpd"
      "http_server/include"
      "http_server/fsdata"
-     "http_server" )
+     "http_server"
+     "time/include" )
 
 set( srcs
      "main.c"
@@ -24,7 +25,8 @@ set( srcs
      "httpd/httpd.c"
      "httpd/strcasestr.c"
      "http_server/http_server.c"
-     "udp/udp_dns_server.c" )
+     "udp/udp_dns_server.c"
+     "time/time_task.c" )
 
 if(NOT CMAKE_BUILD_EARLY_EXPANSION)
     add_definitions("-DLWIP_HTTPD_CGI=1")
