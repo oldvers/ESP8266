@@ -293,8 +293,13 @@ static void time_PointsCalculate(time_t t, struct tm * p_dt, char * p_str)
 
 //-------------------------------------------------------------------------------------------------
 
-static void time_Indicate(time_t t, struct tm * p_dt, char * p_str)
+static void time_Indicate(time_t t, struct tm * p_dt, char * p_str, FW_BOOLEAN pre_transition)
 {
+    enum
+    {
+        TRANSITION_INTERVAL = 1200,
+        TRANSITION_TIMEOUT  = (1300 / portTICK_RATE_MS),
+    };
     led_message_t led_msg      = {0};
     time_t        current_time = t;
     int32_t       point        = 0;
@@ -312,11 +317,25 @@ static void time_Indicate(time_t t, struct tm * p_dt, char * p_str)
             duration    = ((current_time - gPoints[point].start) * 1000);
             TIME_LOGI("[%d] - Interval/Duration    : %12d - %d", point, interval, duration);
 
+            /* Prepare the indication message */
             led_msg.command         = gPoints[point].cmd;
             led_msg.src_color.dword = gPoints[point].src.dword;
             led_msg.dst_color.dword = gPoints[point].dst.dword;
             led_msg.interval        = interval;
             led_msg.duration        = duration;
+
+            if (FW_TRUE == pre_transition)
+            {
+                led_color_t   color   = {0};
+                led_message_t pre_msg = {0};
+                LED_Task_DetermineColor(&led_msg, &color);
+                pre_msg.command         = LED_CMD_INDICATE_COLOR;
+                pre_msg.dst_color.dword = color.dword;
+                pre_msg.interval        = TRANSITION_INTERVAL;
+                LED_Task_SendMsg(&pre_msg);
+                vTaskDelay(TRANSITION_TIMEOUT);
+            }
+
             LED_Task_SendMsg(&led_msg);
 
             break;
@@ -359,8 +378,8 @@ static void time_ProcessMsg(time_message_t * p_msg, time_t t, struct tm * p_dt, 
     if (TIME_CMD_SUN_ENABLE == gCommand)
     {
         time_PointsCalculate(t, p_dt, p_str);
-        time_Indicate(t, p_dt, p_str);
         time_SetAlarm(t, p_dt, p_str);
+        time_Indicate(t, p_dt, p_str, FW_TRUE);
     }
 }
 
@@ -386,8 +405,8 @@ static void time_CheckForAlarms(time_t t, struct tm * p_dt, char * p_str)
                     p_str
                 );
                 time_PointsCalculate(t, p_dt, p_str);
-                time_Indicate(t, p_dt, p_str);
                 time_SetAlarm(t, p_dt, p_str);
+                time_Indicate(t, p_dt, p_str, FW_TRUE);
             }
         }
         else
@@ -401,8 +420,8 @@ static void time_CheckForAlarms(time_t t, struct tm * p_dt, char * p_str)
                     (uint32_t)current_time,
                     p_str
                 );
-                time_Indicate(t, p_dt, p_str);
                 time_SetAlarm(t, p_dt, p_str);
+                time_Indicate(t, p_dt, p_str, FW_TRUE);
             }
         }
     }

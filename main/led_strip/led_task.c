@@ -71,6 +71,8 @@ static const char * gTAG = "LED";
 
 //-------------------------------------------------------------------------------------------------
 
+static const double  gPi       = 3.1415926;
+
 static QueueHandle_t gLedQueue = {0};
 static leds_t        gLeds     = {0};
 
@@ -165,7 +167,7 @@ static double led_LinearInterpolation(double a, double b, double t)
 
 //-------------------------------------------------------------------------------------------------
 
-// Performs smooth color transition between two RGB colors
+// Calculates smooth color transition between two RGB colors
 static void led_SmoothColorTransition
 (
     led_color_t * p_a,
@@ -182,6 +184,47 @@ static void led_SmoothColorTransition
     p_r->r = (uint8_t)led_LinearInterpolation(p_a->r, p_b->r, prgs);
     p_r->g = (uint8_t)led_LinearInterpolation(p_a->g, p_b->g, prgs);
     p_r->b = (uint8_t)led_LinearInterpolation(p_a->b, p_b->b, prgs);
+}
+
+//-------------------------------------------------------------------------------------------------
+
+// Calculates rainbow color transition between two RGB colors
+static void led_RainbowColorTransition
+(
+    led_color_t * p_a,
+    led_color_t * p_b,
+    double prgs,
+    led_color_t * p_r
+)
+{
+    hsv_t       src_hsv = {0};
+    hsv_t       dst_hsv = {0};
+    hsv_t       hsv     = {0};
+
+    /* Determine the SRC/DST HSVs */
+    led_RGBtoHSV(p_a, &src_hsv);
+    led_RGBtoHSV(p_b, &dst_hsv);
+
+    /* Calculate Hue */
+    if ((1 == p_b->a) && (dst_hsv.h < src_hsv.h))
+    {
+        dst_hsv.h += 1.0;
+    }
+    if ((0 == p_b->a) && (src_hsv.h < dst_hsv.h))
+    {
+        src_hsv.h += 1.0;
+    }
+    hsv.h = ((dst_hsv.h - src_hsv.h) * prgs + src_hsv.h);
+    if (1.0 < hsv.h)
+    {
+        hsv.h -= 1.0;
+    }
+
+    /* Calculate Value */
+    hsv.v = ((dst_hsv.v - src_hsv.v) * prgs + src_hsv.v);
+    /* Calculate Saturation */
+    hsv.s = ((dst_hsv.s - src_hsv.s) * prgs + src_hsv.s);
+    led_HSVtoRGB(&hsv, p_r);
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -217,7 +260,7 @@ static void led_SetIndication_Color(led_message_t * p_msg)
 {
     enum
     {
-        MIN_TRANSITION_TIME_MS = 3000,
+        MIN_TRANSITION_TIME_MS = 1000,
     };
 
     gLeds.dst_color.dword = 0;
@@ -463,41 +506,13 @@ static void led_SetIndication_RainbowCirculation(led_message_t * p_msg)
 
 static void led_IterateIndication_Rainbow(void)
 {
-    hsv_t       src_hsv = {0};
-    hsv_t       dst_hsv = {0};
-    hsv_t       hsv     = {0};
     led_color_t result  = {0};
     double      percent = (1.0 * gLeds.time.duration / gLeds.time.interval);
 
     if ((gLeds.dst_color.dword != gLeds.src_color.dword) &&
         (gLeds.time.duration < gLeds.time.interval))
     {
-        /* Determine the SRC/DST HSVs */
-        led_RGBtoHSV(&gLeds.src_color, &src_hsv);
-        led_RGBtoHSV(&gLeds.dst_color, &dst_hsv);
-
-        /* Calculate Hue */
-        if ((1 == gLeds.dst_color.a) && (dst_hsv.h < src_hsv.h))
-        {
-            dst_hsv.h += 1.0;
-        }
-        if ((0 == gLeds.dst_color.a) && (src_hsv.h < dst_hsv.h))
-        {
-            src_hsv.h += 1.0;
-        }
-        hsv.h = ((dst_hsv.h - src_hsv.h) * percent + src_hsv.h);
-        if (1.0 < hsv.h)
-        {
-            hsv.h -= 1.0;
-        }
-
-        /* Calculate Value */
-        hsv.v = ((dst_hsv.v - src_hsv.v) * percent + src_hsv.v);
-        /* Calculate Saturation */
-        hsv.s = ((dst_hsv.s - src_hsv.s) * percent + src_hsv.s);
-
-        led_HSVtoRGB(&hsv, &result);
-
+        led_RainbowColorTransition(&gLeds.src_color, &gLeds.dst_color, percent, &result);
         gLeds.time.duration += gLeds.time.delta;
     }
     else
@@ -564,14 +579,13 @@ static void led_SetIndication_Rainbow(led_message_t * p_msg)
 
 static void led_IterateIndication_Sine(void)
 {
-    const double pi      = 3.1415926;
     led_color_t  result  = {0};
     double       percent = (1.0 * gLeds.time.duration / gLeds.time.interval);
 
     if ((gLeds.dst_color.dword != gLeds.src_color.dword) &&
         (gLeds.time.duration < gLeds.time.interval))
     {
-        percent = sin(percent * pi);
+        percent = sin(percent * gPi);
         led_SmoothColorTransition(&gLeds.src_color, &gLeds.dst_color, percent, &result);
         gLeds.time.duration += gLeds.time.delta;
     }
@@ -595,6 +609,7 @@ static void led_SetIndication_Sine(led_message_t * p_msg)
     {
         MIN_TRANSITION_TIME_MS = 1000,
     };
+
     gLeds.dst_color.dword = 0;
     gLeds.dst_color.r     = p_msg->dst_color.r;
     gLeds.dst_color.g     = p_msg->dst_color.g;
@@ -744,6 +759,32 @@ void LED_Task_SendMsg(led_message_t * p_msg)
     );
 
     (void)xQueueSendToBack(gLedQueue, (void *)p_msg, (TickType_t)0);
+}
+
+//-------------------------------------------------------------------------------------------------
+
+void LED_Task_DetermineColor(led_message_t * p_msg, led_color_t * p_color)
+{
+    double percent = (1.0 * p_msg->duration / p_msg->interval);
+
+    p_color->dword = 0;
+
+    if (p_msg->duration < p_msg->interval)
+    {
+        switch (p_msg->command)
+        {
+            case LED_CMD_INDICATE_RAINBOW:
+                led_RainbowColorTransition(&p_msg->src_color, &p_msg->dst_color, percent, p_color);
+                break;
+            case LED_CMD_INDICATE_SINE:
+                percent = sin(percent * gPi);
+                led_SmoothColorTransition(&p_msg->src_color, &p_msg->dst_color, percent, p_color);
+                break;
+            default:
+                led_SmoothColorTransition(&p_msg->src_color, &p_msg->dst_color, percent, p_color);
+                break;
+        }
+    }
 }
 
 //-------------------------------------------------------------------------------------------------
