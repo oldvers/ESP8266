@@ -225,7 +225,7 @@ static void time_PointsCalculate(time_t t, struct tm * p_dt, char * p_str)
     tz_offset = mktime(p_dt);
     TIME_LOGI("Time zone offset           : %10d s", (uint32_t)tz_offset);
 
-    gmtime_r(&ref_utc_time, p_dt);
+    localtime_r(&ref_utc_time, p_dt);
     p_dt->tm_sec   = 0;
     p_dt->tm_min   = 1;
     p_dt->tm_hour  = 12;
@@ -372,22 +372,38 @@ static void time_CheckForAlarms(time_t t, struct tm * p_dt, char * p_str)
 
     if (TIME_CMD_SUN_ENABLE == gCommand)
     {
-        /* Check for midnight */
-        localtime_r(&current_time, p_dt);
-        if ((0 == p_dt->tm_hour) && (0 == p_dt->tm_min) && (0 <= p_dt->tm_sec))
+        /* If the alarm is not set */
+        if (LONG_MAX == gAlarm)
         {
-            TIME_LOGI("Midnight detected!         : %12d - %s", (uint32_t)current_time, p_str);
-            time_PointsCalculate(t, p_dt, p_str);
-            time_Indicate(t, p_dt, p_str);
-            time_SetAlarm(t, p_dt, p_str);
+            /* Check for midnight */
+            localtime_r(&current_time, p_dt);
+            if ((0 == p_dt->tm_hour) && (0 == p_dt->tm_min) && (0 <= p_dt->tm_sec))
+            {
+                TIME_LOGI
+                (
+                    "Midnight detected!         : %12d - %s",
+                    (uint32_t)current_time,
+                    p_str
+                );
+                time_PointsCalculate(t, p_dt, p_str);
+                time_Indicate(t, p_dt, p_str);
+                time_SetAlarm(t, p_dt, p_str);
+            }
         }
-
-        /* Check for alarm */
-        if (current_time >= gAlarm)
+        else
         {
-            TIME_LOGI("Alarm detected!            : %12d - %s", (uint32_t)current_time, p_str);
-            time_Indicate(t, p_dt, p_str);
-            time_SetAlarm(t, p_dt, p_str);
+            /* Check for alarm */
+            if (current_time >= gAlarm)
+            {
+                TIME_LOGI
+                (
+                    "Alarm detected!            : %12d - %s",
+                    (uint32_t)current_time,
+                    p_str
+                );
+                time_Indicate(t, p_dt, p_str);
+                time_SetAlarm(t, p_dt, p_str);
+            }
         }
     }
 }
@@ -449,6 +465,7 @@ static void vTime_Task(void * pvParameters)
             retry++;
             if (RETRY_COUNT == retry)
             {
+                TIME_LOGE("Retry to sync the date/time");
                 retry = 0;
                 sntp_restart();
             }
@@ -637,6 +654,8 @@ static void time_Test_Alarm(void)
     char           string[28] = {0};
     time_t         zero_time  = 0;
     time_t         tz_offset  = 0;
+    led_message_t  led_msg    = {0};
+    struct timeval tv         = {0};
 
     /* Set the timezone */
     TIME_LOGI("Set timezone to - %s", gTZ);
@@ -649,24 +668,57 @@ static void time_Test_Alarm(void)
     tz_offset = mktime(&datetime);
     TIME_LOGI("Time zone offset           : %10d s", (uint32_t)tz_offset);
 
-    datetime.tm_sec   = 0;
-    datetime.tm_min   = 0;
-    datetime.tm_hour  = 0;
-    datetime.tm_mday  = 18;
+    /* Determine the date/time before midnight */
+    datetime.tm_sec   = 46;
+    datetime.tm_min   = 59;
+    datetime.tm_hour  = 23;
+    datetime.tm_mday  = 17;
     datetime.tm_mon   = 10 - 1;
     datetime.tm_year  = 2024 - 1900;
     datetime.tm_wday  = 0;
     datetime.tm_yday  = 0;
     datetime.tm_isdst = 1;
-    now = (mktime(&datetime) - tz_offset);
-    datetime.tm_isdst = 1;
-    gmtime_r(&now, &datetime);
+    now = mktime(&datetime);
     strftime(string, sizeof(string), "%c", &datetime);
     TIME_LOGI("Test time                  : %12d - %s", (uint32_t)now, string);
 
-    time_PointsCalculate(now, &datetime, string);
-    time_Indicate(now, &datetime, string);
-    time_SetAlarm(now, &datetime, string);
+    /* Transition to DST color for 1100 ms */
+    led_msg.command         = LED_CMD_INDICATE_COLOR;
+    /* To - Red */
+    led_msg.dst_color.r     = 255;
+    led_msg.dst_color.g     = 0;
+    led_msg.dst_color.b     = 0;
+    led_msg.dst_color.a     = 0;
+    /* From - Ignored */
+    led_msg.src_color.dword = 0;
+    led_msg.interval        = 1100;
+    led_msg.duration        = 0;
+    LED_Task_SendMsg(&led_msg);
+    vTaskDelay(2000 / portTICK_RATE_MS);
+
+    /* Set the time */
+    tv.tv_sec  = now;
+    tv.tv_usec = 0;
+    settimeofday(&tv, NULL);
+
+    /* Wait till the Time task will be in sync */
+    vTaskDelay(7 * TIME_TASK_TICK_MS);
+
+    /* Enable the Sun emulation */
+    time_message_t msg = {TIME_CMD_SUN_ENABLE};
+    Time_Task_SendMsg(&msg);
+
+    /* Wait till the Time task indicate the night and go through the midnight */
+    vTaskDelay(15 * TIME_TASK_TICK_MS);
+
+    /* Set the date/time before calculated alarm */
+    now        = (gPoints[3].start - 10);
+    tv.tv_sec  = now;
+    tv.tv_usec = 0;
+    settimeofday(&tv, NULL);
+
+    /* Wait till the alarm happens */
+    vTaskDelay(15 * TIME_TASK_TICK_MS);
 }
 
 //-------------------------------------------------------------------------------------------------
