@@ -31,7 +31,6 @@ set( srcs
 if(NOT CMAKE_BUILD_EARLY_EXPANSION)
     add_definitions("-DLWIP_HTTPD_CGI=1")
     add_definitions("-DLWIP_HTTPD_SSI=1")
-    add_definitions("-DLWIP_DEBUG=1")
     add_definitions("-DHTTPD_DEBUG=LWIP_DBG_ON")
 endif()
 
