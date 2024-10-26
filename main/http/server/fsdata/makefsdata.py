@@ -49,8 +49,10 @@ def process_file(input_dir, file):
         raise RuntimeError(f"Unsupported file type {file.suffix}")
 
     # file name
-    data = f"/{file.relative_to(input_dir)}\x00"
-    comment = f"\"/{file.relative_to(input_dir)}\" ({len(data)} chars)"
+    file_name = str(file.relative_to(input_dir))
+    file_name = file_name.replace("\\", "/")
+    data = f"/{file_name}\x00"
+    comment = f"\"/{file_name}\" ({len(data)} chars)"
     while(len(data) % PAYLOAD_ALIGNMENT != 0):
         data += "\x00"
     results.append({'data': bytes(data, "utf-8"), 'comment': comment});
