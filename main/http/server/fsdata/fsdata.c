@@ -1,4 +1,4 @@
-#include "httpd/fsdata.h"
+#include "fsdata.h"
 
 static const unsigned char data_complete_html[] = {
 

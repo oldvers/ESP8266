@@ -91,7 +91,7 @@ def process_file(input_dir, file):
 
 def process_file_list(fd, input):
     data = []
-    fd.write("#include \"httpd/fsdata.h\"\n")
+    fd.write("#include \"fsdata.h\"\n")
     fd.write("\n")
     # generate the page contents
     input_dir = None

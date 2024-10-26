@@ -5,10 +5,9 @@ set( include_dirs
      "wifi/include"
      "udp/include"
      "led_strip/include"
-     "httpd"
-     "http_server/include"
-     "http_server/fsdata"
-     "http_server"
+     "http/daemon/include"
+     "http/server/include"
+     "http/server/fsdata"
      "time/include" )
 
 set( srcs
@@ -21,10 +20,10 @@ set( srcs
      "udp/udp_task.c"
      "led_strip/led_strip.c"
      "led_strip/led_task.c"
-     "httpd/fs.c"
-     "httpd/httpd.c"
-     "httpd/strcasestr.c"
-     "http_server/http_server.c"
+     "http/daemon/fs.c"
+     "http/daemon/httpd.c"
+     "http/daemon/strcasestr.c"
+     "http/server/http_server.c"
      "udp/udp_dns_server.c"
      "time/time_task.c" )
 
