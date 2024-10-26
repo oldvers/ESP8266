@@ -127,6 +127,18 @@
             "problemMatcher": [
                 "$gcc"
             ]
+        },
+        {
+            "label": "makefsdata",
+            "command": "python",
+            "type": "shell",
+            "args": [
+                "${env:CD_PATH}\\..\\main\\http_server\\fsdata\\makefsdata.py"
+            ],
+            "group": "build",
+            "problemMatcher": [
+                "$gcc"
+            ]
         }
     ]
 }

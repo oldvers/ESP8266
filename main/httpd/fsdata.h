@@ -35,6 +35,9 @@
 #include "lwip/opt.h"
 #include "fs.h"
 
+#define FS_FILE_FLAGS_HEADER_INCLUDED (1)
+#define FS_FILE_FLAGS_HEADER_PERSISTENT (1)
+
 struct fsdata_file {
   const struct fsdata_file *next;
   const unsigned char *name;
