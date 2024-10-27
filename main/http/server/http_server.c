@@ -1,8 +1,4 @@
-/*
- * HTTP server example.
- *
- * This sample code is in the public domain.
- */
+/* HTTP Server */
 
 #include <stdint.h>
 #include <string.h>
@@ -11,17 +7,31 @@
 #include <FreeRTOS.h>
 #include <task.h>
 
-////#include <espressif/esp_common.h>
-////#include "esp8266/esp8266.h"
-//#include "uart.h"
-//#include "gpio.h"
-////#include <ssid_config.h>
-#include "httpd.h"
 #include "esp_system.h"
+#include "esp_log.h"
+
+#include "types.h"
+#include "httpd.h"
 #include "wifi_task.h"
 #include "led_task.h"
+#include "time_task.h"
 
-#define LED_PIN 2
+//-------------------------------------------------------------------------------------------------
+
+#define HTTPS_LOG  1
+
+#if (1 == HTTPS_LOG)
+static const char * gTAG = "HTTPS";
+#    define HTTPS_LOGI(...)  ESP_LOGI(gTAG, __VA_ARGS__)
+#    define HTTPS_LOGE(...)  ESP_LOGE(gTAG, __VA_ARGS__)
+#    define HTTPS_LOGW(...)  ESP_LOGV(gTAG, __VA_ARGS__)
+#else
+#    define HTTPS_LOGI(...)
+#    define HTTPS_LOGE(...)
+#    define HTTPS_LOGW(...)
+#endif
+
+//-------------------------------------------------------------------------------------------------
 
 enum
 {
@@ -30,9 +40,13 @@ enum
     SSI_LED_STATE
 };
 
+//-------------------------------------------------------------------------------------------------
+
 static bool gConfig = false;
 
-int32_t ssi_handler(int32_t iIndex, char * pcInsert, int32_t iInsertLen)
+//-------------------------------------------------------------------------------------------------
+
+static int32_t ssi_handler(int32_t iIndex, char * pcInsert, int32_t iInsertLen)
 {
     switch (iIndex)
     {
@@ -54,7 +68,9 @@ int32_t ssi_handler(int32_t iIndex, char * pcInsert, int32_t iInsertLen)
     return (strlen(pcInsert));
 }
 
-char * gpio_cgi_handler(int iIndex, int iNumParams, char * pcParam[], char * pcValue[])
+//-------------------------------------------------------------------------------------------------
+
+static char * gpio_cgi_handler(int iIndex, int iNumParams, char * pcParam[], char * pcValue[])
 {
     for (int i = 0; i < iNumParams; i++)
     {
@@ -80,17 +96,23 @@ char * gpio_cgi_handler(int iIndex, int iNumParams, char * pcParam[], char * pcV
     return "/index.ssi";
 }
 
-char * complete_cgi_handler(int iIndex, int iNumParams, char * pcParam[], char * pcValue[])
+//-------------------------------------------------------------------------------------------------
+
+static char * complete_cgi_handler(int iIndex, int iNumParams, char * pcParam[], char * pcValue[])
 {
     return "/complete.html";
 }
 
-char * websocket_cgi_handler(int iIndex, int iNumParams, char * pcParam[], char * pcValue[])
+//-------------------------------------------------------------------------------------------------
+
+static char * websocket_cgi_handler(int iIndex, int iNumParams, char * pcParam[], char * pcValue[])
 {
     return "/websockets.html";
 }
 
-void websocket_task(void * pvParameter)
+//-------------------------------------------------------------------------------------------------
+
+static void vWebSocket_Task(void * pvParameter)
 {
     struct tcp_pcb * pcb = (struct tcp_pcb *) pvParameter;
 
@@ -98,7 +120,7 @@ void websocket_task(void * pvParameter)
     {
         if (pcb == NULL || pcb->state != ESTABLISHED)
         {
-            printf("Connection closed, deleting task\n");
+            HTTPS_LOGI("Connection closed, deleting task");
             break;
         }
 
@@ -123,7 +145,9 @@ void websocket_task(void * pvParameter)
     vTaskDelete(NULL);
 }
 
-bool websocket_parse_wifi_string(wifi_string_p p_str, uint8_t * p_buf, uint8_t * p_offset)
+//-------------------------------------------------------------------------------------------------
+
+static bool websocket_parse_wifi_string(wifi_string_p p_str, uint8_t * p_buf, uint8_t * p_offset)
 {
     wifi_string_p p_str_buf = NULL;
 
@@ -139,7 +163,9 @@ bool websocket_parse_wifi_string(wifi_string_p p_str, uint8_t * p_buf, uint8_t *
     return true;
 }
 
-bool websocket_copy_wifi_string(uint8_t * p_buf, uint8_t * p_offset, wifi_string_p p_str)
+//-------------------------------------------------------------------------------------------------
+
+static bool websocket_copy_wifi_string(uint8_t * p_buf, uint8_t * p_offset, wifi_string_p p_str)
 {
     if ((WIFI_STRING_MAX_LEN * 3) < (*p_offset)) return false;
     if (WIFI_STRING_MAX_LEN < p_str->length) return false;
@@ -150,34 +176,51 @@ bool websocket_copy_wifi_string(uint8_t * p_buf, uint8_t * p_offset, wifi_string
     return true;
 }
 
+//-------------------------------------------------------------------------------------------------
 /**
  * This function is called when websocket frame is received.
  *
  * Note: this function is executed on TCP thread and should return as soon
  * as possible.
  */
-void websocket_cb(struct tcp_pcb * pcb, uint8_t * data, uint16_t data_len, uint8_t mode)
+static void websocket_cb(struct tcp_pcb * pcb, uint8_t * data, uint16_t data_len, uint8_t mode)
 {
     enum
     {
-        MAX_LEN = (4 + 3 * sizeof(wifi_string_t)),
+        MAX_LEN                       = (4 + 3 * sizeof(wifi_string_t)),
+        MAX_DATE_TIME_LEN             = 28,
+        CMD_UNKNOWN                   = 0x00,
+        CMD_GET_CONNECTION_PARAMETERS = 0x01,
+        CMD_SET_CONNECTION_PARAMETERS = 0x02,
+        CMD_SET_COLOR                 = 0x03,
+        CMD_SET_SUN_IMITATION_MODE    = 0x04,
+        CMD_GET_STATUS                = 0x05,
+        SUCCESS                       = 0x00,
+        ERROR                         = 0xFF,
+        ON                            = 0x01,
+        OFF                           = 0x00,
+        MODE_SUN_IMITATION            = 0,
+        MODE_COLOR                    = 1,
     };
-    printf("[websocket_callback]:\n");
-    //%.*s\n", (int)data_len, (char *)data);
 
-    uint8_t       response[MAX_LEN] = {0};
-    uint16_t      val               = 0;
-    uint32_t      rnd               = 0;
-    uint8_t       offset            = 1;
-    uint8_t       len               = 2;
-    wifi_string_t ssid              = {0};
-    wifi_string_t pswd              = {0};
-    wifi_string_t site              = {0};
-    bool          result            = true;
+    uint8_t        response[MAX_LEN] = {0};
+    uint8_t        offset            = 1;
+    uint8_t        len               = 2;
+    wifi_string_t  ssid              = {0};
+    wifi_string_t  pswd              = {0};
+    wifi_string_t  site              = {0};
+    time_message_t time_msg          = {0};
+    led_color_t    color             = {0};
+    time_t         now               = 0;
+    struct tm      datetime          = {0};
+    bool           result            = true;
+
+    response[0] = CMD_UNKNOWN;
+    response[1] = ERROR;
 
     switch (data[0])
     {
-        case 0x01:
+        case CMD_GET_CONNECTION_PARAMETERS:
             result = WiFi_GetParams(&ssid, &pswd, &site);
             if (true == result)
             {
@@ -188,84 +231,123 @@ void websocket_cb(struct tcp_pcb * pcb, uint8_t * data, uint16_t data_len, uint8
                 if (result)
                 {
                     len = offset;
-                    val = 0x0100;
+                    response[0] = CMD_GET_CONNECTION_PARAMETERS;
+                    response[1] = SUCCESS;
                 }
             }
             break;
-        case 0x02:
+        case CMD_SET_CONNECTION_PARAMETERS:
             result &= websocket_parse_wifi_string(&ssid, data, &offset);
             result &= websocket_parse_wifi_string(&pswd, data, &offset);
             result &= websocket_parse_wifi_string(&site, data, &offset);
             if (result)
             {
-                printf("The config received!\n");
-                printf(" - SSID = %s\n", ssid.data);
-                printf(" - PSWD = %s\n", pswd.data);
-                printf(" - SITE = %s\n", site.data);
+                HTTPS_LOGI("The config received!");
+                HTTPS_LOGI(" - SSID = %s", ssid.data);
+                HTTPS_LOGI(" - PSWD = %s", pswd.data);
+                HTTPS_LOGI(" - SITE = %s", site.data);
             }
             result &= WiFi_SaveParams(&ssid, &pswd, &site);
             if (result)
             {
-                val = 0x0200;
+                response[0] = CMD_SET_CONNECTION_PARAMETERS;
+                response[1] = SUCCESS;
             }
             break;
-        case 0x03:
-            printf("Received Color - R:%d G:%d B:%d\n", data[1], data[2], data[3]);
+        case CMD_SET_COLOR:
+            HTTPS_LOGI("The color received - R:%d G:%d B:%d", data[1], data[2], data[3]);
 
             led_message_t msg =
             {
-                .command = LED_CMD_INDICATE_COLOR,
+                .command   = LED_CMD_INDICATE_COLOR,
                 .src_color = {.bytes = {0}},
                 .dst_color = {.r = data[1], .g = data[2], .b = data[3]},
-                .interval = 0,
-                .duration = 0
+                .interval  = 0,
+                .duration  = 0
             };
             LED_Task_SendMsg(&msg);
 
-            val = 0x0300;
+            time_msg.command = TIME_CMD_SUN_DISABLE;
+            Time_Task_SendMsg(&time_msg);
+
+            response[0] = CMD_SET_COLOR;
+            response[1] = SUCCESS;
+            break;
+        case CMD_SET_SUN_IMITATION_MODE:
+            HTTPS_LOGI("The Sun mode received: %d", data[1]);
+            if (ON == data[1])
+            {
+                time_msg.command = TIME_CMD_SUN_ENABLE;
+            }
+            else
+            {
+                time_msg.command = TIME_CMD_SUN_DISABLE;
+            }
+            Time_Task_SendMsg(&time_msg);
+            response[0] = CMD_SET_SUN_IMITATION_MODE;
+            response[1] = SUCCESS;
+            break;
+        case CMD_GET_STATUS:
+            response[0] = CMD_GET_STATUS;
+            response[1] = SUCCESS;
+            if (FW_TRUE == Time_Task_IsInSunImitationMode())
+            {
+                response[2] = MODE_SUN_IMITATION;
+            }
+            else
+            {
+                response[2] = MODE_COLOR;
+            }
+            LED_Task_GetCurrentColor(&color);
+            response[3] = color.r;
+            response[4] = color.g;
+            response[5] = color.b;
+            time(&now);
+            localtime_r(&now, &datetime);
+            offset = strftime((char *)&response[7], MAX_DATE_TIME_LEN, "%c", &datetime);
+            response[6] = offset;
+            len = (offset + 7);
             break;
         case 'A': // ADC
             /* This should be done on a separate thread in 'real' applications */
-            rnd = esp_random();
-            val = (rnd >> 22); // sdk_system_adc_read();
+            //rnd = esp_random();
+            //val = (rnd >> 22); // sdk_system_adc_read();
             break;
         case 'D': // Disable LED
-//          gpio_write(LED_PIN, true);
-            val = 0xDEAD;
+            //gpio_write(LED_PIN, true);
+            //val = 0xDEAD;
             break;
         case 'E': // Enable LED
-//          gpio_write(LED_PIN, false);
-            val = 0xBEEF;
+            //gpio_write(LED_PIN, false);
+            //val = 0xBEEF;
             break;
         default:
-            printf("Unknown command\n");
-            val = 0;
+            HTTPS_LOGI("Unknown command");
+            //val = 0;
             break;
     }
-
-    response[1] = (uint8_t) val;
-    response[0] = val >> 8;
 
     websocket_write(pcb, response, len, WS_BIN_MODE);
 }
 
+//-------------------------------------------------------------------------------------------------
 /**
  * This function is called when new websocket is open and
  * creates a new websocket_task if requested URI equals '/stream'.
  */
-void websocket_open_cb(struct tcp_pcb * pcb, const char * uri)
+static void websocket_open_cb(struct tcp_pcb * pcb, const char * uri)
 {
-    printf("WS URI: %s\n", uri);
+    HTTPS_LOGI("WS URI: %s", uri);
     if (!strcmp(uri, "/stream"))
     {
-        printf("request for streaming\n");
-        xTaskCreate(&websocket_task, "websocket_task", 1024, (void *)pcb, 2, NULL);
+        HTTPS_LOGI("Request for streaming");
+        xTaskCreate(&vWebSocket_Task, "WebSocket Task", 1024, (void *)pcb, 2, NULL);
     }
 }
 
 //-------------------------------------------------------------------------------------------------
 
-void httpd_task(void * pvParameters)
+static void vHTTP_Server_Task(void * pvParameters)
 {
     tCGI pCGIs[] =
     {
@@ -306,17 +388,17 @@ void httpd_task(void * pvParameters)
 
 void HTTP_Server_Init(bool config)
 {
-    printf("SDK version: %s\n", esp_get_idf_version());
+    HTTPS_LOGI("SDK version: %s", esp_get_idf_version());
 
     gConfig = config;
-    printf("HTTP Config = %d\n", gConfig);
+    HTTPS_LOGI("HTTP Config = %d", gConfig);
 
-    /* turn off LED */
+    /* Turn off LED */
     //gpio_enable(LED_PIN, GPIO_OUTPUT);
     //gpio_write(LED_PIN, true);
 
-    /* initialize tasks */
-    xTaskCreate(&httpd_task, "HTTP Daemon", 2048, NULL, 2, NULL);
+    /* Initialize task */
+    xTaskCreate(&vHTTP_Server_Task, "HTTP Server", 2048, NULL, 2, NULL);
 }
 
 //-------------------------------------------------------------------------------------------------

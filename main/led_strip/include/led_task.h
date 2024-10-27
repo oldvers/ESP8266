@@ -31,6 +31,7 @@ typedef struct
 void LED_Task_Init(void);
 void LED_Task_SendMsg(led_message_t * p_msg);
 void LED_Task_DetermineColor(led_message_t * p_msg, led_color_t * p_color);
+void LED_Task_GetCurrentColor(led_color_t * p_color);
 void LED_Task_Test(void);
 
 #endif /* __LED_TASK_H__ */

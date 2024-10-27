@@ -11,7 +11,6 @@
 #include "esp_log.h"
 #include "lwip/apps/sntp.h"
 
-#include "types.h"
 #include "time_task.h"
 #include "led_task.h"
 
@@ -498,10 +497,14 @@ static void vTime_Task(void * pvParameters)
 
 void Time_Task_Init(void)
 {
+    time_message_t msg = {TIME_CMD_SUN_ENABLE};
+
     gTimeQueue = xQueueCreate(20, sizeof(time_message_t));
 
     /* SNTP service uses LwIP, large stack space should be allocated  */
     xTaskCreate(vTime_Task, "TIME", 2048, NULL, 5, NULL);
+
+    Time_Task_SendMsg(&msg);
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -511,6 +514,16 @@ void Time_Task_SendMsg(time_message_t * p_msg)
     (void)xQueueSendToBack(gTimeQueue, (void *)p_msg, (TickType_t)0);
 }
 
+//-------------------------------------------------------------------------------------------------
+
+FW_BOOLEAN Time_Task_IsInSunImitationMode(void)
+{
+    /* This call is not thread safe but this is acceptable */
+    return (TIME_CMD_SUN_ENABLE == gCommand);
+}
+
+//-------------------------------------------------------------------------------------------------
+//--- Tests ---------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
 
 static void time_Test_Calculations(void)

@@ -77,9 +77,6 @@ void app_main()
     LED_Task_Init();
     WiFi_Task_Init();
     Time_Task_Init();
-
-    time_message_t msg = {TIME_CMD_SUN_ENABLE};
-    Time_Task_SendMsg(&msg);
 }
 
 //-------------------------------------------------------------------------------------------------

@@ -1,6 +1,8 @@
 #ifndef __TIME_TASK_H__
 #define __TIME_TASK_H__
 
+#include "types.h"
+
 typedef enum
 {
     TIME_CMD_EMPTY,
@@ -15,6 +17,7 @@ typedef struct
 
 void Time_Task_Init(void);
 void Time_Task_SendMsg(time_message_t * p_msg);
+FW_BOOLEAN Time_Task_IsInSunImitationMode(void);
 void Time_Task_Test(void);
 
 #endif /* __TIME_TASK_H__ */
