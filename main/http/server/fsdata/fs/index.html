@@ -26,7 +26,7 @@
 						<input type="checkbox" id="sun_switch" class="switch" onclick="onSunSwitchClick(this.checked);"/>
 					</div>
 					<div class="is-flex has-items-center">
-						<label class="label has-size-1 has-ml-2" for="sun_switch">The Sun imitation mode</label>
+						<label class="label has-size-1 has-ml-2 is-unselectable" for="sun_switch">The Sun imitation mode</label>
 					</div>
 				</div>
             </div>
@@ -49,9 +49,10 @@
 						     off: 0x00,
 						     retries: 5,
 						     modeSunImitation: 0,
-                             modeColor: 1 };
+                             modeColor: 1,
+						     modeUnknown: 255 };
 		var intervalId = 0;
-		var startupStatus = false;
+		var modeChange = {last: wsProtocol.modeUnknown, initiatedByUser: false, needUiUpdate: false};
 		
 		window.onload = onWindowLoad;
 
@@ -59,16 +60,16 @@
 		{
 			console.log("Window loaded");
 		    wsOpen();
-			colorPicker.on('input:end', onColorChange);
+			colorPicker.on('input:start', onStartColorChange);
+			colorPicker.on('input:end', onEndColorChange);
 			//startPolling();
-			//setStatusBox("info", "Opening WebSocket..");
 			intervalId = setInterval(getStatus, 1000);
 		}
 
 		function getStatus()
 		{
 			console.log("Get status");
-			////clearInterval(intervalId);
+			//clearInterval(intervalId);
 			let buffer = new ArrayBuffer(1);
             let view = new Uint8Array(buffer);
 			view[0] = wsProtocol.getStatus;
@@ -110,7 +111,6 @@
 			}
 			else if ((wsProtocol.setColor == command) && (wsProtocol.success == status))
 			{
-				document.getElementById("sun_switch").checked = false;
 				console.log("Color is set!");
 			}
 			else if ((wsProtocol.setSunImitationMode == command) && (wsProtocol.success == status))
@@ -127,19 +127,31 @@
 				updateStatusBox("success", dts.value);
 
 				sun_switch = document.getElementById("sun_switch");
-				
-				if (wsProtocol.modeSunImitation == mode)
+
+				if ((wsProtocol.modeSunImitation == mode) && (true == sun_switch.checked))
 				{
-					if (false == sun_switch.checked)
-					{
-				        sun_switch.checked = true;
-					}
 					colorPicker.color.set(color);
 				}
-				if (true == startupStatus)
+				if (mode != modeChange.last)
 				{
+					modeChange.last = mode;
+					if (false == modeChange.initiatedByUser)
+					{
+						modeChange.needUiUpdate = true;
+					}
+				}
+				if (true == modeChange.needUiUpdate)
+				{
+					if (wsProtocol.modeSunImitation == mode)
+				    {
+					    sun_switch.checked = true;
+					}
+					else
+					{
+						sun_switch.checked = false;
+					}
 					colorPicker.color.set(color);
-					startupStatus = false;
+					modeChange.needUiUpdate = false;
 				}
 			}
 			//if (val == 0xBEEF || val == 0xDEAD)
@@ -183,6 +195,9 @@
 				ws.onclose = function(evt) { updateStatusBox("warning", "Disconnected"); };
 				//wsOpenStream();
 				retries = 0;
+				modeChange.needUiUpdate = true;
+				modeChange.last = wsProtocol.modeUnknown;
+				modeChange.initiatedByUser = false;
 			}
 		}
 
@@ -228,6 +243,8 @@
 			{
 				view[1] = wsProtocol.off;
 			}
+
+			modeChange.initiatedByUser = true;
 				
 			wsSendToServer(buffer);
 			getStatus();
@@ -249,9 +266,15 @@
 			}
 		}
 
-        function onColorChange(color)
+		function onStartColorChange(color)
 		{
-            console.log("Color = " + color.red + " " + color.green + " " + color.blue);
+			document.getElementById("sun_switch").checked = false;
+			modeChange.initiatedByUser = true;
+		}
+
+        function onEndColorChange(color)
+		{
+            console.log("End color = " + color.red + ":" + color.green + ":" + color.blue);
 
             let buffer = new ArrayBuffer(4);
             let view = new Uint8Array(buffer);
@@ -277,7 +300,6 @@
 			view[0] = wsProtocol.getConnectionParameters;
 			wsSendToServer(buffer);
 
-			startupStatus = true;
 			getStatus();
 		}
 
