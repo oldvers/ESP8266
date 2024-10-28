@@ -186,8 +186,19 @@
 				{
 					updateStatusBox("secondary", "Connecting...");
 				}
-				console.log(location.host);
-				ws = new WebSocket("ws://" + location.host);
+				console.log("location.host = " + location.host);
+				if ((location.hostname === "localhost") ||
+					(location.hostname === "127.0.0.1") ||
+					(location.hostname === "fs"))
+				{
+					console.log("WS: Use local host");
+				    ws = new WebSocket("ws://localhost:8080");
+				}
+				else
+				{
+					console.log("WS: Use remote host");
+					ws = new WebSocket("ws://" + location.host);
+				}
 				ws.binaryType = 'arraybuffer';
 				ws.onopen = function(evt) {  onConnectedToServer(evt); };
 				ws.onerror = function(evt) { updateStatusBox("danger", "Error!"); };
