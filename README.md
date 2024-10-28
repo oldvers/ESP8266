@@ -1,9 +1,9 @@
 # Web Aqua Light Project
 
 ## Requirements
-1. Python 3.x
-2. Git
-3. Visual Studio Code
+1. [Python 3.x](https://www.python.org)
+2. [Git](https://git-scm.com)
+3. [Visual Studio Code](https://code.visualstudio.com)
 
 ## Schematic
 ![Schematic](./docs/images/schematic.png)
@@ -35,7 +35,15 @@
 4. Enter the appropriate fields in the configuration form and click the "Save" button. The following web page with the next steps will be shown.
 ![Configuration complete](./docs/images/configuration-complete.png)
 5. During connection to the router the periodic blue color fade will be indicated on the LED strip. After a successful connection to the router, the rotating rainbow will be indicated on the LED strip.
-6. After the device is connected to the router open the browser and enter the site name you entered in the configuration web page. The following web page will be shown and you can control the color and brightness of the LED strip.
+6. After the device is connected to the router open the browser and enter the site name you entered in the configuration web page. The following web page will be shown and you can control the color and brightness of the LED strip. You can also enable the Sun imitation mode. In this mode, the device synchronizes the date/time via the Internet, calculates the sunrise/sundown times, and sets the color/brightness according to the Sun's position in the sky.
 ![WebAquaLight](./docs/images/webaqualight.png)
 
 7. For Android devices, the "mDNS Discovery" application can be used to discover the device in the network and avoid the knowledge of the exact device IP address. During the discovery process, the application will show the site name entered in the configuration web page.
+
+## Resources
+- The HTTP server with WebSockets [article](https://lujji.github.io/blog/esp-httpd).
+- The captive portal [basics](https://en.wikipedia.org/wiki/Captive_portal).
+- A minimal and themeable css [toolkit](https://siimple.xyz).
+- Modular, design-conscious color picker [widget](https://iro.js.org) for JavaScript.
+- A JavaScript charting [library](http://smoothiecharts.org) for streaming sata.
+- The Chrome as a local web server [tips](./docs/chrome-devtools.md).
