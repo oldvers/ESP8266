@@ -46,6 +46,20 @@ if %errorlevel% neq 0 (
     echo WARNING! It seems the SDK folder already exists. Trying to install the tools...
 )
 
+echo Switch to the ESP IDF folder
+pushd .
+cd "%IDF_PATH%"
+
+echo Switch to the correct branch
+git.exe checkout -b release/v3.4 remotes/origin/release/v3.4 --
+if %errorlevel% neq 0 (
+    set SCRIPT_EXIT_CODE=0
+    echo WARNING! It seems the SDK branch already checked out. Trying to install the tools...
+)
+
+echo Restore the folder
+popd
+
 echo Installing ESP-IDF tools
 python %IDF_PATH%\tools\idf_tools.py install
 if %errorlevel% neq 0 (
