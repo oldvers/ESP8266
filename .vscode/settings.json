@@ -1,11 +1,13 @@
 {
     "task.allowAutomaticTasks": "off",
     "task.autoDetect": "off",
+    "cmake.configureOnOpen": false,
     "files.associations": {
         "esp_spi_flash.h": "c",
         "spi_flash.h": "c",
         "gpio.h": "c",
         "err.h": "c",
-        "dhcpserver.h": "c"
+        "dhcpserver.h": "c",
+        "freertos.h": "c"
     }
 }
