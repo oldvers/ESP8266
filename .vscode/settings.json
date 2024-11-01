@@ -1,5 +1,6 @@
 {
-    "idf.adapterTargetName": "esp8266",
+    "task.allowAutomaticTasks": "off",
+    "task.autoDetect": "off",
     "files.associations": {
         "esp_spi_flash.h": "c",
         "spi_flash.h": "c",
@@ -7,6 +8,4 @@
         "err.h": "c",
         "dhcpserver.h": "c"
     }
-    //"cmake.cmakePath":"${env:CMAKE_PATH}\\cmake.exe",
-    //"python.venvPath":"${env:IDF_PYTHON_ENV_PATH}"
 }

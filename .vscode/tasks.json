@@ -5,7 +5,7 @@
     "tasks":
     [
         {
-            "label": "build",
+            "label": "Build - Build the project",
             "group": {
                 "kind": "build",
                 "isDefault": true
@@ -37,7 +37,7 @@
             }
         },
         {
-            "label": "config",
+            "label": "Build - Configure the project",
             "command": "python",
             "type": "shell",
             "args": [
@@ -51,7 +51,45 @@
             ]
         },
         {
-            "label": "flash",
+            "label": "Build - Clean",
+            "command": "python",
+            "type": "shell",
+            "args": [
+                "${env:IDF_PATH}\\tools\\idf.py",
+                "clean"
+            ],
+            "group": "build",
+            "problemMatcher": [
+                "$gcc"
+            ]
+        },
+        {
+            "label": "Build - Full clean",
+            "command": "python",
+            "type": "shell",
+            "args": [
+                "${env:IDF_PATH}\\tools\\idf.py",
+                "fullclean"
+            ],
+            "group": "build",
+            "problemMatcher": [
+                "$gcc"
+            ]
+        },
+        {
+            "label": "Build - Makefsdata",
+            "command": "python",
+            "type": "shell",
+            "args": [
+                "${env:CD_PATH}\\..\\main\\http\\server\\fsdata\\makefsdata.py"
+            ],
+            "group": "build",
+            "problemMatcher": [
+                "$gcc"
+            ]
+        },
+        {
+            "label": "Flash - Program",
             "command": "python",
             "type": "shell",
             "args": [
@@ -68,7 +106,7 @@
             ]
         },
         {
-            "label": "erase",
+            "label": "Flash - Erase",
             "command": "python",
             "type": "shell",
             "args": [
@@ -87,7 +125,7 @@
             ]
         },
         {
-            "label": "monitor",
+            "label": "Flash - Monitor",
             "command": "python",
             "type": "shell",
             "args": [
@@ -102,43 +140,5 @@
                 "$gcc"
             ]
         },
-        {
-            "label": "clean",
-            "command": "python",
-            "type": "shell",
-            "args": [
-                "${env:IDF_PATH}\\tools\\idf.py",
-                "clean"
-            ],
-            "group": "build",
-            "problemMatcher": [
-                "$gcc"
-            ]
-        },
-        {
-            "label": "full clean",
-            "command": "python",
-            "type": "shell",
-            "args": [
-                "${env:IDF_PATH}\\tools\\idf.py",
-                "fullclean"
-            ],
-            "group": "build",
-            "problemMatcher": [
-                "$gcc"
-            ]
-        },
-        {
-            "label": "makefsdata",
-            "command": "python",
-            "type": "shell",
-            "args": [
-                "${env:CD_PATH}\\..\\main\\http\\server\\fsdata\\makefsdata.py"
-            ],
-            "group": "build",
-            "problemMatcher": [
-                "$gcc"
-            ]
-        }
     ]
 }
