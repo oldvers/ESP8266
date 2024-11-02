@@ -1,7 +1,7 @@
 {
     "configurations": [
         {
-            "name": "ESP8266",
+            "name": "ESP8266-Web-Aqua-Light",
             "compilerPath": "${env:IDF_TOOLS_PATH}/tools/xtensa-lx106-elf/esp-2020r3-49-gd5524c1-8.4.0/xtensa-lx106-elf/bin/xtensa-lx106-elf-gcc.exe",
             "cStandard": "c11",
             "cppStandard": "c++17",
@@ -11,7 +11,6 @@
             "includePath": [
                 "${workspaceFolder}/**",
                 "${workspaceFolder}",
-                "${workspaceRoot}/build/**",
                 "${env:IDF_TOOLS_PATH}/tools/xtensa-lx106-elf/esp-2020r3-49-gd5524c1-8.4.0/xtensa-lx106-elf/xtensa-lx106-elf/include/**",
                 "${env:IDF_TOOLS_PATH}/tools/xtensa-lx106-elf/esp-2020r3-49-gd5524c1-8.4.0/xtensa-lx106-elf/lib/gcc/xtensa-lx106-elf/8.4.0/include/**",
                 "${IDF_PATH}/components/**"
@@ -26,13 +25,12 @@
                 "path": [
                     "${workspaceFolder}/**",
                     "${workspaceFolder}",
-                    "${workspaceRoot}/build/**",
                     "${env:IDF_TOOLS_PATH}/tools/xtensa-lx106-elf/esp-2020r3-49-gd5524c1-8.4.0/xtensa-lx106-elf/xtensa-lx106-elf/include/**",
                     "${env:IDF_TOOLS_PATH}/tools/xtensa-lx106-elf/esp-2020r3-49-gd5524c1-8.4.0/xtensa-lx106-elf/lib/gcc/xtensa-lx106-elf/8.4.0/include/**",
                     "${IDF_PATH}/components/**"
                 ],
                 "limitSymbolsToIncludedHeaders": true,
-                "databaseFilename": "${workspaceRoot}/.vscode/browse.vc.db"
+                "databaseFilename": "${workspaceFolder}/.vscode/browse.vc.db"
             }
         }
     ],
